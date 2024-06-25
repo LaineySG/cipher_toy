@@ -1,8 +1,10 @@
 use std::io;
+use std::env;
 mod ciphers;
 
 /// Main driver logic for user input
 fn main() {
+    env::set_var("RUST_BACKTRACE", "1");
     loop {
         println!("Hello! What would you like to do today? To see options, say 'help', or to exit, say 'exit'.");
 
@@ -33,24 +35,26 @@ fn main() {
                     io::stdin().read_line(&mut user_vars).expect("Failed to read user input!");
                     let args: Vec<&str> = user_vars.split(',').collect(); //split args by comma to get array of user inputted values
                     let valid_type_options = ["enc","dec"];
-                    if args[1].trim().to_lowercase().parse::<i32>().is_ok() && valid_type_options.iter().any(|&option| args[2].trim().to_lowercase().contains(option)) { 
-                        let shift_key = args[1].trim().to_lowercase().parse::<i32>(); //Try to get shift key as integer
-                        match shift_key {
-                            Ok(shift_key) => {
-                                let result = ciphers::caesar_cipher(args[0],shift_key,args[2]);
-                                let result_description = match args[2] {
-                                    x if x.contains("enc") => "ciphertext",
-                                    x if x.contains("dec") => "plaintext",
-                                    _=> "output",
-                                };
-                                println!("Resulting {} is: \t {}",result_description,result);
-                            },
-                            Err(_) => {
-                                println!("Shift key must be an integer, please try again.")
+                    if let Some(val) = args.get(2) { //make sure there are 3 given values
+                        if args[1].trim().to_lowercase().parse::<i32>().is_ok() && valid_type_options.iter().any(|&option| val.trim().to_lowercase().contains(option)) { 
+                            let shift_key = args[1].trim().to_lowercase().parse::<i32>(); //Try to get shift key as integer
+                            match shift_key {
+                                Ok(shift_key) => {
+                                    let result = ciphers::caesar_cipher(args[0],shift_key,val);
+                                    let result_description = match val {
+                                        x if x.contains("enc") => "ciphertext",
+                                        x if x.contains("dec") => "plaintext",
+                                        _=> "output",
+                                    };
+                                    println!("Resulting {} is: \t {}",result_description,result);
+                                },
+                                Err(_) => {
+                                    println!("Shift key must be an integer, please try again.")
+                                }
                             }
+                        } else {
+                            println!("Please enter a proper number of arguments");
                         }
-                    } else {
-                        println!("There was an error with this input!");
                     }
                 } else {
                     println!("Please try selecting a cipher again.");
@@ -71,17 +75,21 @@ fn main() {
     
                     io::stdin().read_line(&mut user_vars).expect("Failed to read user input!");
                     let args: Vec<&str> = user_vars.split(',').collect();
-                    let valid_type_options = ["enc","dec"];
-                    if valid_type_options.iter().any(|&option| args[2].trim().to_lowercase().contains(option)) { 
-                            let result = ciphers::vigenere_cipher(args[0],args[1],args[2]);
-                            let result_description = match args[2] { //match input to get a nice output
-                                x if x.contains("enc") => "ciphertext",
-                                x if x.contains("dec") => "plaintext",
-                                _=> "output",
-                            };
-                            println!("Resulting {} is: \t {}",result_description,result);
+                    if let Some(val) = args.get(2) { //make sure there are 3 given values
+                        let valid_type_options = ["enc","dec"];
+                        if valid_type_options.iter().any(|&option| val.trim().to_lowercase().contains(option)) { 
+                                let result = ciphers::vigenere_cipher(args[0],args[1],val);
+                                let result_description = match val { //match input to get a nice output
+                                    x if x.contains("enc") => "ciphertext",
+                                    x if x.contains("dec") => "plaintext",
+                                    _=> "output",
+                                };
+                                println!("Resulting {} is: \t {}",result_description,result);
+                        } else {
+                            println!("Couldn't locate 'enc' or 'dec' in reply!");
+                        }
                     } else {
-                        println!("There was an error with this input!");
+                        println!("Please enter a proper number of arguments");
                     }
                 } else {
                     println!("Please try selecting a cipher again.");
@@ -105,11 +113,30 @@ fn main() {
                     println!("Please try selecting a cipher again.");
                 }
             }
+            opt if opt.contains("rot") || opt.contains("13") => {
+                println!("An ROT13 cipher is a simple substitution cipher that rotates each character by 13 spaces, as if choosing the other side of an alphabet wheel. Is this what you would like to do?");
+
+                //read input
+                io::stdin().read_line(&mut user_choice).expect("Failed to read user input!");
+
+
+                let valid_yes_options = ["y","1"];
+                if valid_yes_options.iter().any(|&option| user_choice.trim().to_lowercase().contains(option)) { 
+                    println!("Since the ROT13 cipher doesn't require a key and the encryption and decryption methods are the same, please enter only your secret message.");
+    
+                    io::stdin().read_line(&mut user_vars).expect("Failed to read user input!");
+                    let result = ciphers::rot13_cipher(&user_vars);
+                    println!("Resulting output is: \t {}", result);
+                } else {
+                    println!("Please try selecting a cipher again.");
+                }
+            }
             opt if opt.contains("help") => {
                 println!("Enter a valid cipher option. Valid options include the following:\n\n
 caesar cipher: shift characters by integer shift key,\n
 vigenere cipher: shift characters by repeating string key,\n
-atbash cipher: reverse characters (a => z, b => y, ...),\n\n
+atbash cipher: reverse characters (a => z, b => y, ...),\n
+ROT13 cipher: shift characters by 13 places,\n\n
 Note: You don't need to enter the full name, you only have to enter enough of the name to register as uniquely one cipher (ie, cae and vig both will work)\n");
             }
             opt if opt.contains("exit") => {
