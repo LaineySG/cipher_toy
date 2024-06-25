@@ -1,5 +1,7 @@
 use ascii::AsciiStr;
 const LOWERCASE_ASCII_OFFSET: i32 = 97;
+const UPPERCASE_ASCII_OFFSET: i32 = 65;
+const INTEGER_ASCII_OFFSET: i32 = 48; //48 is 0, 57 is 9
 
 /// Shifts character by converting from char to u8, u8 to i32, add the i32 shift argument, then convert back to u8 and finally return as a character
 pub fn shift_char(c: char, shift: i32) -> char {
@@ -47,6 +49,29 @@ pub fn vigenere_cipher(message: &str, key: &str, enc_type: &str) -> String {
         key_cursor += 1;
 
         result += &shift_char(current_char, shift).to_string(); //Finally, add the shifted char as a string, to result.
+    }
+    result
+}
+
+/// The atbash cipher takes a message and reverses all characters in the string.
+pub fn atbash_cipher(message: &str) -> String {
+    let mut result = String::new();
+    for c in message.chars() { //For each character in the message to decrypt, we reverse that char and push it to result
+        let out = match c {
+            x if x.is_uppercase() => { //if uppercase, take char as int, subtract the uppercase ascii offset, then take 25 and subtract the result from it to get the new ascii digit, and finally add the offset back and return a char.
+                (25 - (((c as u8) as i32) - UPPERCASE_ASCII_OFFSET) + UPPERCASE_ASCII_OFFSET) as u8 as char
+            },
+            x if x.is_lowercase() => {
+                (25 - (((c as u8) as i32) - LOWERCASE_ASCII_OFFSET) + LOWERCASE_ASCII_OFFSET) as u8 as char
+            },
+            x if x.to_string().parse::<i32>().is_ok() => { //if it parses as integer, we do same as above but w/ integer conversions
+                (9 - (((c as u8) as i32) - INTEGER_ASCII_OFFSET) + INTEGER_ASCII_OFFSET) as u8 as char
+            },
+            _ => {
+                c
+            }
+        };
+        result.push_str(&out.to_string());
     }
     result
 }

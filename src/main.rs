@@ -87,8 +87,30 @@ fn main() {
                     println!("Please try selecting a cipher again.");
                 }
             }
+            opt if opt.contains("atb") => {
+                println!("An Atbash cipher is a common monoalphabetic substitution cipher that reverses the characters in a message. Is this what you would like to do?");
+
+                //read input
+                io::stdin().read_line(&mut user_choice).expect("Failed to read user input!");
+
+
+                let valid_yes_options = ["y","1"];
+                if valid_yes_options.iter().any(|&option| user_choice.trim().to_lowercase().contains(option)) { 
+                    println!("Since the atbash cipher doesn't require a key and the encryption and decryption methods are the same, please enter only your secret message.");
+    
+                    io::stdin().read_line(&mut user_vars).expect("Failed to read user input!");
+                    let result = ciphers::atbash_cipher(&user_vars);
+                    println!("Resulting output is: \t {}", result);
+                } else {
+                    println!("Please try selecting a cipher again.");
+                }
+            }
             opt if opt.contains("help") => {
-                println!("Enter a valid cipher option. Valid options include the following:\n\ncaesar cipher,\nvigenere cipher,\n\nNote: You don't need to enter the full name, you only have to enter enough of the name to register as uniquely one cipher (ie, cae and vig both will work)");
+                println!("Enter a valid cipher option. Valid options include the following:\n\n
+caesar cipher: shift characters by integer shift key,\n
+vigenere cipher: shift characters by repeating string key,\n
+atbash cipher: reverse characters (a => z, b => y, ...),\n\n
+Note: You don't need to enter the full name, you only have to enter enough of the name to register as uniquely one cipher (ie, cae and vig both will work)\n");
             }
             opt if opt.contains("exit") => {
                 println!("Exiting program!");
