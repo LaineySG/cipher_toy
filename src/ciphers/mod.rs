@@ -1,7 +1,9 @@
 use ascii::AsciiStr;
+use modinverse::modinverse;
 const LOWERCASE_ASCII_OFFSET: i32 = 97;
 const UPPERCASE_ASCII_OFFSET: i32 = 65;
 const INTEGER_ASCII_OFFSET: i32 = 48; //48 is 0, 57 is 9
+
 
 /// Shifts character while keeping it in a safe range of characters (stopping newline and other weird ascii chars as well as potential overflow)
 pub fn shift_char(c: char, shift: i32) -> char {
@@ -12,8 +14,7 @@ pub fn shift_char(c: char, shift: i32) -> char {
     let wrapped_value = (shifted_value - 48).rem_euclid(79) + 48;
     wrapped_value as u8 as char
 }
-
-/// Caesar cipher shifts the values of each character in the message by a set amount, the shift key. To decrypt, it simply reverses this (shifting backwards).
+ /// Caesar cipher shifts the values of each character in the message by a set amount, the shift key. To decrypt, it simply reverses this (shifting backwards).
 pub fn caesar_cipher(message: &str, shift: i32, enc_type: &str) -> String {
     let mut result = String::new();
     let shift = if enc_type.contains("dec") { -shift } else { shift }; //If we're decrypting, shift should be backwards.
@@ -95,6 +96,41 @@ pub fn rot13_cipher(message: &str) -> String {
             _ => { //else return that char
                 c
             }
+        };
+        result.push_str(&out.to_string());
+    }
+    result
+}
+
+/// The affine cipher takes a message and performs the modification: *a + b on each character. To decrypt, it performs /a - b.
+pub fn affine_cipher(message: &str, a: i32, b: i32, enc_type: &str) -> String {
+    let mut result = String::new();
+    for c in message.chars() {
+        let out = match c {
+            c if c.is_uppercase() => {
+                if enc_type.contains("enc") {
+                    (((((c as u8 as i32) - UPPERCASE_ASCII_OFFSET) * a + b) % 26) + UPPERCASE_ASCII_OFFSET) as u8 as char
+                } else {
+                    let inverse_modulo = modinverse(a, 26).unwrap(); //calculates the inverse modulo
+                    let char_dec = (c as u8 as i32) - UPPERCASE_ASCII_OFFSET; //character value from 0 to 26   
+
+                    (((inverse_modulo * (char_dec - b + 26)) % 26 ) + UPPERCASE_ASCII_OFFSET) as u8 as char 
+                    //undoes adding b, add 26 to ensure it's positive, multiply by inverse modulo (undoes modulo), takes mod 26 so the result will be between 0 and 25,
+                    //and finally adds the offset and converts back to char
+                }
+            },
+            c if c.is_lowercase() => {
+                if enc_type.contains("enc") {
+                    (((((c as u8 as i32) - LOWERCASE_ASCII_OFFSET) * a + b) % 26) + LOWERCASE_ASCII_OFFSET) as u8 as char
+                } else {
+                    let inverse_modulo = modinverse(a, 26).unwrap(); 
+                    let char_dec = (c as u8 as i32) - LOWERCASE_ASCII_OFFSET; //character value from 0 to 26                   
+                    (((inverse_modulo * (char_dec - b + 26)) % 26 ) + LOWERCASE_ASCII_OFFSET) as u8 as char
+                }
+            },
+            _ => {
+                c
+            },
         };
         result.push_str(&out.to_string());
     }

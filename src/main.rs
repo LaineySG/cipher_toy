@@ -131,11 +131,48 @@ fn main() {
                     println!("Please try selecting a cipher again.");
                 }
             }
+            opt if opt.contains("aff") => {
+                println!("An affine cipher is a monoalphabetic substitution cipher that performs a mathematical operation, *a + b on a character, given the key [a,b]. Is this what you would like to do?");
+
+                //read input
+                io::stdin().read_line(&mut user_choice).expect("Failed to read user input!");
+
+
+                let valid_yes_options = ["y","1"];
+                if valid_yes_options.iter().any(|&option| user_choice.trim().to_lowercase().contains(option)) { 
+                    println!("Please enter a comma separated list consisting of your message, multiplicative key a, additive key b, and whether you will be \
+                    encrypting or decrypting the message. For example, \"secretmessage,3,4,enc\"");
+    
+                    io::stdin().read_line(&mut user_vars).expect("Failed to read user input!");
+                    let args: Vec<&str> = user_vars.split(',').collect();
+                    if let Some(val) = args.get(3) { //make sure there are 4 given values
+                        let valid_type_options = ["enc","dec"];
+                        if valid_type_options.iter().any(|&option| val.trim().to_lowercase().contains(option)) { 
+                                let mult_key_a = args[1].trim().to_lowercase().parse::<i32>().unwrap(); //Try to get key a as integer
+                                let add_key_b = args[2].trim().to_lowercase().parse::<i32>().unwrap(); //Try to get key b as integer
+                                let result = ciphers::affine_cipher(args[0],mult_key_a,add_key_b,val);
+                                let result_description = match val { //match input to get a nice output
+                                    x if x.contains("enc") => "ciphertext",
+                                    x if x.contains("dec") => "plaintext",
+                                    _=> "output",
+                                };
+                                println!("Resulting {} is: \t {}",result_description,result);
+                        } else {
+                            println!("Couldn't locate 'enc' or 'dec' in reply!");
+                        }
+                    } else {
+                        println!("Please enter a proper number of arguments");
+                    }
+                } else {
+                    println!("Please try selecting a cipher again.");
+                }
+            }
             opt if opt.contains("help") => {
                 println!("Enter a valid cipher option. Valid options include the following:\n\n
 caesar cipher: shift characters by integer shift key,\n
 vigenere cipher: shift characters by repeating string key,\n
 atbash cipher: reverse characters (a => z, b => y, ...),\n
+Affine cipher: Performs *a+b on chars to encrypt, opposite to decrypt,\n
 ROT13 cipher: shift characters by 13 places,\n\n
 Note: You don't need to enter the full name, you only have to enter enough of the name to register as uniquely one cipher (ie, cae and vig both will work)\n");
             }
