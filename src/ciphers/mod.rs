@@ -1,9 +1,16 @@
+use std::collections::HashMap;
 use ascii::AsciiStr;
+use core::cmp::Ordering;
 use modinverse::modinverse;
 use rand::Rng;
 const LOWERCASE_ASCII_OFFSET: i32 = 97;
 const UPPERCASE_ASCII_OFFSET: i32 = 65;
 const INTEGER_ASCII_OFFSET: i32 = 48; //48 is 0, 57 is 9
+const LETTER_LIKELIHOOD_DICT: [f64;26] = [
+    0.08167, 0.01492, 0.02782, 0.04253, 0.12702, 0.02228, 0.02015, 0.06094, 
+    0.06966, 0.00153, 0.00772, 0.04025, 0.02406, 0.06749, 0.07507, 0.01929, 
+    0.00095, 0.05987, 0.06327, 0.09056, 0.02758, 0.00978, 0.02360, 0.00150, 
+    0.01974, 0.00074];
 
 
 /// Shifts character while keeping it in a safe range of characters (stopping newline and other weird ascii chars as well as potential overflow)
@@ -312,4 +319,52 @@ pub fn railfence_cipher(message: &str, rails: i32, enc_type: &str) -> String {
 
 }  
 
+//Scores likelihood that a string is plain english and thus decoded, based on relative frequencies of letters, bigrams, trigrams, first characters, and last characters in words.
+pub fn score_string(message: &str) -> f64 {
+    let mut result_counts: Vec<i32> = vec![0;26];
+    let mut result_weights: Vec<f64> = vec![0.0;26];
+    let message = &message.to_lowercase();
+    let char_count_total = message.chars().count() as i32;
+    let mut diff_score = 0.0;
+    for c in message.chars() {
+        if c.is_alphabetic() {
+            let current_char_int = ((c as u8) as i32) - LOWERCASE_ASCII_OFFSET;
+            let char_count = result_counts[current_char_int as usize] + 1; //increment the count
+            result_counts[current_char_int as usize] = char_count; //set the result count of the given char's int value to the new count
+        }
+        else {
+            diff_score += 0.01
+        }
+    }
+    for i in 0..result_counts.len() { //for each alphabetical letter we now get the weight
+        result_weights[i as usize] = result_counts[i as usize] as f64 / char_count_total as f64;
+    }
 
+    //Now we have array result_counts containing a vector of weights for each character, in alphabetic order
+    //Next we find the difference between each
+    for i in 0..result_weights.len() {
+        if result_weights[i as usize] != 0.0 {
+            diff_score += (LETTER_LIKELIHOOD_DICT[i as usize] - result_weights[i as usize]).abs();
+        }
+    }
+    diff_score
+}
+
+pub fn bruteforce(message: &str, enc_type: &str) -> String {
+    let mut results: Vec<(f64, String)> = vec![]; //unwrap option or set to unknown encryption type
+
+    if enc_type.contains("unk") || enc_type.contains("cae") { //unknown or caesar. Quick to test as there are only 26 possible shifts.
+        let mut current: String;
+        for i in 0..=26 { //0 to 26 inclusive
+            current = caesar_cipher(message, i, "dec");
+            results.push((score_string(&current), current)); //push data as tuple
+        }
+    }
+    results.sort_by(|a, b| a.0.partial_cmp(&b.0).unwrap_or(Ordering::Equal));
+    for (score, message) in results {
+        println!("\n"); //higher numbers are more different from english and thus less likely to be the plaintext result.
+        println!("({:.2}): {}", score, message);
+    }
+    String::new()
+
+}

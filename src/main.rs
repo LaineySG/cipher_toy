@@ -6,7 +6,7 @@ mod ciphers;
 fn main() {
     env::set_var("RUST_BACKTRACE", "1");
     loop {
-        println!("Hello! What would you like to do today? To see options, say 'help', or to exit, say 'exit'.");
+        println!("Hello! What would you like to do today? Say 'help' to see cipher options, 'bruteforce' to attempt a bruteforce, or 'exit' to exit.");
 
         //Creates choice and var storage, mutable
         let mut user_choice = String::new();
@@ -244,6 +244,33 @@ fn main() {
                     println!("Please try selecting a cipher again.");
                 }
             }
+            opt if opt.contains("bru") => {
+                println!("This will attempt a bruteforce on a string encoded using one of the available cipher types. Note that some cipher types will take longer than others, and may not be possible given a secure enough key. Is this what you would like to do?");
+
+                //read input
+                io::stdin().read_line(&mut user_choice).expect("Failed to read user input!");
+
+                let valid_yes_options = ["y","1"];
+                if valid_yes_options.iter().any(|&option| user_choice.trim().to_lowercase().contains(option)) { 
+                    println!("Please enter a comma separated list consisting of the encrypted text, followed by the encryption type if you know it. Knowing the encryption method will speed up the process but is not necessary. For example, \"encryptedmessage,railcipher\" or simply \"encryptedmessage\"");
+    
+                    io::stdin().read_line(&mut user_vars).expect("Failed to read user input!");
+                    let args: Vec<&str> = user_vars.split(',').collect();
+                    let result: String;
+                    if let Some(val) = args.get(1) { //check if there are 2 values
+                        result = ciphers::bruteforce(args[0],val);
+                    } else {
+                        result = ciphers::bruteforce(args[0], "unknown");
+                    }
+
+                    println!("Most likely results: \n{}", result);
+
+                } else {
+                    println!("Please try selecting a cipher again.");
+                }
+            }
+
+
             opt if opt.contains("help") => {
                 println!("Enter a valid cipher option. Valid options include the following:\n\n
 caesar cipher: shift characters by integer shift key,\n
