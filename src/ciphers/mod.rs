@@ -1,5 +1,6 @@
 use ascii::AsciiStr;
 use modinverse::modinverse;
+use rand::Rng;
 const LOWERCASE_ASCII_OFFSET: i32 = 97;
 const UPPERCASE_ASCII_OFFSET: i32 = 65;
 const INTEGER_ASCII_OFFSET: i32 = 48; //48 is 0, 57 is 9
@@ -136,3 +137,89 @@ pub fn affine_cipher(message: &str, a: i32, b: i32, enc_type: &str) -> String {
     }
     result
 }
+
+/// A baconian cipher converts characters to binary, then that binary is changed such that 0's are a's, and 1's are b's. It can also use different
+/// typefaces such as CAPS for 1's and lowercase for 0's. This particular method creates a random string of numbers where high numbers signify 1's and low
+/// numbers signify 0's. This helps to obfuscate the data.
+pub fn baconian_cipher(message:&str, enc_type: &str) -> String {
+    //converts ascii chars to digits, then 5bit binary. This can then be converted to strings of random numbers 
+    //where 0,1,2,3,4,5,6 are binary 0's and 7,8,9 are binary 1's. 
+    let mut result = String::new();
+    if enc_type.contains("enc") {
+        for c in message.chars() {
+            match c {
+                c if c.is_whitespace() => { //return whitespace
+                    result.push_str(&c.to_string());
+                },
+                c if c.is_uppercase() => {
+                    let _char_dec = c as u8 as i32 - UPPERCASE_ASCII_OFFSET; //Get the decimal char value
+                    let char_bin = format!("{_char_dec:05b}"); //convert it to 5-bit binary
+
+                    //Convert the 0's and 1's to random integers and push it to result
+                    for c in char_bin.chars() {
+                        let out = match c {
+                            '0' => {
+                                let mut rng = rand::thread_rng();
+                                rng.gen_range(0..7) as u8 //up to, not including 7
+                            }, _ => { // else 1
+                                let mut rng = rand::thread_rng();
+                                rng.gen_range(7..10) as u8 //up to, not including 10
+                            }
+                        };
+                        result.push_str(&out.to_string());
+                    };
+                },
+                c if c.is_lowercase() => {
+                    let _char_dec = c as u8 as i32 - LOWERCASE_ASCII_OFFSET;
+                    let char_bin = format!("{_char_dec:05b}");
+
+                    //Convert the 0's and 1's to random integers and push it to result
+                    for c in char_bin.chars() {
+                        let out = match c {
+                            '0' => {
+                                let mut rng = rand::thread_rng();
+                                rng.gen_range(0..7).to_string() //up to, not including 7
+                            }, _ => { // else 1
+                                let mut rng = rand::thread_rng();
+                                rng.gen_range(7..10).to_string() //up to, not including 10
+                            }
+                        };
+                        result.push_str(&out);
+                    };
+                },
+                _ => {
+                    result.push_str(&c.to_string());
+                },
+            };
+        }
+        result
+    } else {  //decryption
+        let mut number_counter = 0;
+        let mut binary_dec = 0;
+        for c in message.chars() {
+            match c {
+            c if c.is_whitespace() => {
+                result.push_str(&c.to_string());
+            },
+            c if c.is_numeric() => {   
+                let num = c as i32 - '0' as i32; //converts num to i32 from ascii representation
+                number_counter += 1;
+                if num >= 7 { //if number is high enough, it's a binary 1; add the converted binary value
+                    let power_exp = 5 - number_counter as i32; //power exponent is 5-the counter since it reads L to R, not R to L
+                    binary_dec += 2i32.pow(power_exp as u32); //convert it to dec
+                }
+                if number_counter >= 5 { //if counter if >=5, add the binary dec value and reset (since each # is a 5-bit binary)
+                    number_counter = 0;
+                    result.push_str(&((binary_dec + LOWERCASE_ASCII_OFFSET ) as u8 as char).to_string()); //get char as lowercase and return it
+                    binary_dec = 0;
+                }
+            },
+            _ => {
+                return String::from("Cipher is not decryptable using a baconian cipher. Baconian ciphered text must contain only numeric digits and whitespace."); 
+            }
+            };   
+        }
+        result
+    }
+}
+
