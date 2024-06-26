@@ -201,6 +201,49 @@ fn main() {
                     println!("Please try selecting a cipher again.");
                 }
             }
+            opt if opt.contains("rai") => {
+                println!("A Railfence cipher is a transposition cipher that shuffles each character according to a number of rails that act as the key. Is this what you would like to do?");
+
+                //read input
+                io::stdin().read_line(&mut user_choice).expect("Failed to read user input!");
+
+
+                let valid_yes_options = ["y","1"];
+                if valid_yes_options.iter().any(|&option| user_choice.trim().to_lowercase().contains(option)) { 
+                    println!("Please enter a comma separated list consisting of your message, the number of rails you'd like to use (this should be less than the number of characters in the message), and whether you will be \
+                    encrypting or decrypting the message. For example, \"secretmessage,3,enc\"");
+    
+                    io::stdin().read_line(&mut user_vars).expect("Failed to read user input!");
+                    let args: Vec<&str> = user_vars.split(',').collect();
+                    if let Some(val) = args.get(2) { //make sure there are 2 given values
+                        let valid_type_options = ["enc","dec"];
+                        if valid_type_options.iter().any(|&option| val.trim().to_lowercase().contains(option)) { 
+
+                            let rail_int = args[1].trim().to_lowercase().parse::<i32>(); //Try to get shift key as integer
+                            match rail_int {
+                                Ok(rail_int) => {                                
+                                    let result = ciphers::railfence_cipher(args[0],rail_int,val);
+                                    let result_description = match val {
+                                        x if x.contains("enc") => "ciphertext",
+                                        x if x.contains("dec") => "plaintext",
+                                        _=> "output",
+                                    };
+                                    println!("Resulting {} is: \t {}",result_description,result);
+                                },
+                                Err(_) => {
+                                    println!("Shift key must be an integer, please try again.")
+                                }
+                            }
+                        } else {
+                            println!("Couldn't locate 'enc' or 'dec' in reply!");
+                        }
+                    } else {
+                        println!("Please enter a proper number of arguments");
+                    }
+                } else {
+                    println!("Please try selecting a cipher again.");
+                }
+            }
             opt if opt.contains("help") => {
                 println!("Enter a valid cipher option. Valid options include the following:\n\n
 caesar cipher: shift characters by integer shift key,\n
@@ -208,6 +251,7 @@ vigenere cipher: shift characters by repeating string key,\n
 atbash cipher: reverse characters (a => z, b => y, ...),\n
 Affine cipher: Performs *a+b on chars to encrypt, /a-b to decrypt,\n
 Baconian cipher: Encodes text as an integer stream which represents binary,\n
+Railfence cipher: Shuffles the order of the characters using a zig-zag pattern along a # of rails, which act as the key,\n
 ROT13 cipher: shift characters by 13 places,\n\n
 Note: You don't need to enter the full name, you only have to enter enough of the name to register as uniquely one cipher (ie, cae and vig both will work)\n");
             }

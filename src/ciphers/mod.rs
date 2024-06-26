@@ -223,3 +223,93 @@ pub fn baconian_cipher(message:&str, enc_type: &str) -> String {
     }
 }
 
+///Transpositional cipher that shuffles each character as though it is placed in a zig-zag pattern along a rail.
+pub fn railfence_cipher(message: &str, rails: i32, enc_type: &str) -> String {
+    let mut rail_matrix:Vec<Vec<char>> = vec![];
+    let mut result = String::new();
+    let mut cursor:usize = 0;
+    enum Direction {UP,DOWN}
+    let mut current_direction = Direction::DOWN;
+    for _i in 0..rails {
+        rail_matrix.push(vec![]); //add a row for each rail
+    }
+    if enc_type.contains("enc") {
+        for c in message.chars() {
+            rail_matrix[cursor].push(c);
+            if matches!(current_direction, Direction::DOWN) { //checks for equality
+                cursor += 1;
+            } else {
+                cursor -= 1;
+            }
+
+            if (cursor as i32) == (rails - 1) || cursor == 0 { //if at start or end of rails after incrementing or decrementing rail, change directions for next time
+                if matches!(current_direction, Direction::DOWN) {current_direction = Direction::UP} else {current_direction = Direction::DOWN} //swap directions
+            }
+        }
+        
+           //Now we have the railmatrix made up, we can go through it in the correct order (row by row instead of column by column) and output it
+
+        for i in 0..rails {
+        for j in 0..rail_matrix[i as usize].len() {
+            result += &(rail_matrix[i as usize][j as usize]).to_string() //add to result
+        }
+        }
+    } else { //decryption 
+        let mut rail_matrix = vec![vec![' ';message.chars().count()]; rails as usize];
+        let (mut row_cursor, mut column_cursor) = (0,0);
+
+        //First we mark each row to be filled
+        for _c in message.chars() {
+            if row_cursor == 0 {
+                current_direction = Direction::UP;
+            } else if row_cursor == (rails - 1) {
+                current_direction = Direction::DOWN;
+            }
+
+            rail_matrix[row_cursor as usize][column_cursor as usize] = '*';
+            column_cursor += 1;
+            if matches!(current_direction,Direction::UP) {row_cursor += 1;} else {row_cursor -= 1};
+        }
+
+
+
+        //Converts the messasge to ascii, then slices it into an array of ascii characters (so it can be indexed properly)
+        let indexed_message = AsciiStr::from_ascii(message).unwrap(); 
+        let message_ascii_arr = indexed_message.as_slice();
+
+        //Now we will the rail matrix with the correct items
+        let mut message_cursor = 0;
+        for i in 0..rails {
+            for j in 0..message.chars().count() {
+                if rail_matrix[i as usize][j as usize] == '*' && cursor < message.chars().count() {
+                    rail_matrix[i as usize][j as usize] = message_ascii_arr[message_cursor].as_char();
+                    message_cursor += 1;
+                }
+            }
+        }
+
+        //finally we can run through the matrix in a zig-zag pattern to reconstruct the original message.
+        let mut message_array: Vec<char> = vec![];
+        let (mut row_cursor, mut column_cursor) = (0,0);
+        for _i in 0..message.chars().count() {
+            if row_cursor == 0 {
+                current_direction = Direction::UP;
+            } else if row_cursor == (rails - 1) {
+                current_direction = Direction::DOWN;
+            }
+
+            //This fills in spaces to the result
+            if rail_matrix[row_cursor as usize][column_cursor as usize] != '*' {
+                message_array.push(rail_matrix[row_cursor as usize][column_cursor as usize] as char);
+                column_cursor += 1
+            }
+            
+            if matches!(current_direction,Direction::UP) {row_cursor += 1;} else {row_cursor -= 1};
+            result = message_array.clone().into_iter().collect();
+        }
+    }
+    result //return result
+
+}  
+
+
