@@ -24,7 +24,7 @@ fn main() {
                 io::stdin().read_line(&mut user_choice).expect("Failed to read user input!");
 
 
-                let valid_yes_options = ["y","1"]; //creates array of valid options
+                let valid_yes_options = ["y"]; //creates array of valid options
 
                 if valid_yes_options.iter().any(|&option| user_choice.trim().to_lowercase().contains(option)) { 
                     //Checks if either option is contained in the user's selection
@@ -68,7 +68,7 @@ fn main() {
                 io::stdin().read_line(&mut user_choice).expect("Failed to read user input!");
 
 
-                let valid_yes_options = ["y","1"];
+                let valid_yes_options = ["y"];
                 if valid_yes_options.iter().any(|&option| user_choice.trim().to_lowercase().contains(option)) { 
                     println!("Please enter a comma separated list consisting of your message, the string key, and whether you will be \
                     encrypting or decrypting the message. For example, \"secretmessage,secretkey,enc\"");
@@ -102,7 +102,7 @@ fn main() {
                 io::stdin().read_line(&mut user_choice).expect("Failed to read user input!");
 
 
-                let valid_yes_options = ["y","1"];
+                let valid_yes_options = ["y"];
                 if valid_yes_options.iter().any(|&option| user_choice.trim().to_lowercase().contains(option)) { 
                     println!("Since the atbash cipher doesn't require a key and the encryption and decryption methods are the same, please enter only your secret message.");
     
@@ -120,7 +120,7 @@ fn main() {
                 io::stdin().read_line(&mut user_choice).expect("Failed to read user input!");
 
 
-                let valid_yes_options = ["y","1"];
+                let valid_yes_options = ["y"];
                 if valid_yes_options.iter().any(|&option| user_choice.trim().to_lowercase().contains(option)) { 
                     println!("Since the ROT13 cipher doesn't require a key and the encryption and decryption methods are the same, please enter only your secret message.");
     
@@ -132,13 +132,13 @@ fn main() {
                 }
             }
             opt if opt.contains("aff") => {
-                println!("An affine cipher is a monoalphabetic substitution cipher that performs a mathematical operation, *a + b on a character, given the key [a,b]. Is this what you would like to do?");
+                println!("An affine cipher is a monoalphabetic substitution cipher that performs a mathematical operation, *a + b on a character, given the key [a,b]. a must be coprime to 26 (eg 3,5,7,9,11,15...). Is this what you would like to do?");
 
                 //read input
                 io::stdin().read_line(&mut user_choice).expect("Failed to read user input!");
 
 
-                let valid_yes_options = ["y","1"];
+                let valid_yes_options = ["y"];
                 if valid_yes_options.iter().any(|&option| user_choice.trim().to_lowercase().contains(option)) { 
                     println!("Please enter a comma separated list consisting of your message, multiplicative key a, additive key b, and whether you will be \
                     encrypting or decrypting the message. For example, \"secretmessage,3,4,enc\"");
@@ -174,7 +174,7 @@ fn main() {
                 io::stdin().read_line(&mut user_choice).expect("Failed to read user input!");
 
 
-                let valid_yes_options = ["y","1"];
+                let valid_yes_options = ["y"];
                 if valid_yes_options.iter().any(|&option| user_choice.trim().to_lowercase().contains(option)) { 
                     println!("Please enter a comma separated list consisting of your message and whether you will be \
                     encrypting or decrypting the message. For example, \"secretmessage,enc\"");
@@ -208,7 +208,7 @@ fn main() {
                 io::stdin().read_line(&mut user_choice).expect("Failed to read user input!");
 
 
-                let valid_yes_options = ["y","1"];
+                let valid_yes_options = ["y"];
                 if valid_yes_options.iter().any(|&option| user_choice.trim().to_lowercase().contains(option)) { 
                     println!("Please enter a comma separated list consisting of your message, the number of rails you'd like to use (this should be less than the number of characters in the message), and whether you will be \
                     encrypting or decrypting the message. For example, \"secretmessage,3,enc\"");
@@ -228,7 +228,7 @@ fn main() {
                                         x if x.contains("dec") => "plaintext",
                                         _=> "output",
                                     };
-                                    println!("Resulting {} is: \t {}",result_description,result);
+                                    println!("Resulting {} is (remove the single quotes!): \t {}",result_description,result);
                                 },
                                 Err(_) => {
                                     println!("Shift key must be an integer, please try again.")
@@ -245,31 +245,39 @@ fn main() {
                 }
             }
             opt if opt.contains("bru") => {
-                println!("This will attempt a bruteforce on a string encoded using one of the available cipher types. Note that some cipher types will take longer than others, and may not be possible given a secure enough key. Is this what you would like to do?");
+                println!("This will attempt a bruteforce on a string encoded using one of the available cipher types. Note that vigenere will take much longer than others, and may not be possible given a secure enough key. Is this what you would like to do?");
 
                 //read input
                 io::stdin().read_line(&mut user_choice).expect("Failed to read user input!");
 
-                let valid_yes_options = ["y","1"];
+                let valid_yes_options = ["y"];
                 if valid_yes_options.iter().any(|&option| user_choice.trim().to_lowercase().contains(option)) { 
-                    println!("Please enter a comma separated list consisting of the encrypted text, followed by the encryption type if you know it. Knowing the encryption method will speed up the process but is not necessary. For example, \"encryptedmessage,railcipher\" or simply \"encryptedmessage\"");
+                    println!("Please enter a comma separated list consisting of the encrypted text, followed by the encryption type if you know it. This will not work for a vigenere cipher. For example, \"encryptedmessage,railcipher\" or simply \"encryptedmessage\"");
     
                     io::stdin().read_line(&mut user_vars).expect("Failed to read user input!");
                     let args: Vec<&str> = user_vars.split(',').collect();
-                    let result: String;
                     if let Some(val) = args.get(1) { //check if there are 2 values
-                        result = ciphers::bruteforce(args[0],val);
+                        ciphers::bruteforce(args[0],val);
                     } else {
-                        result = ciphers::bruteforce(args[0], "unknown");
+                        ciphers::bruteforce(args[0], "unknown");
                     }
-
-                    println!("Most likely results: \n{}", result);
-
                 } else {
                     println!("Please try selecting a cipher again.");
                 }
             }
+            opt if opt.contains("sco") => {
+                println!("This will score a string. Enter a string to score.");
+                io::stdin().read_line(&mut user_choice).expect("Failed to read user input!");
 
+                let mut word_list: Vec<String> = vec![];
+                if let Ok(lines) = ciphers::read_lines("src/data/1000_most_common.txt") {
+                    // Consumes the iterator, returns an (Optional) String
+                    for line in lines.flatten() {
+                        word_list.push(line);
+                    }
+                } else {println!("Directory not found!")}
+                println!("The score for this string is: {}", ciphers::score_string(&user_choice, &word_list))
+            }
 
             opt if opt.contains("help") => {
                 println!("Enter a valid cipher option. Valid options include the following:\n\n
