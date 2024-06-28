@@ -1,7 +1,5 @@
 use std::io;
 use std::env;
-
-use futures::future::join_all;
 use futures::join;
 mod ciphers;
 
@@ -292,11 +290,11 @@ async fn main() {
                 let valid_yes_options = ["y"];
                 if valid_yes_options.iter().any(|&option| user_choice.trim().to_lowercase().contains(option)) { 
                     println!("Please enter the encrypted text and a security level from 0 to 100 separated by a comma. Higher security levels will check more passwords but will take much longer. 5 is a good start for weak passwords. For example, \"encryptedmessage,5\"");
-                    let mut bfl = (5.0 / 100.0 * 14344392.0) as i32;
+                    let mut bfl = (5.0 / 100.0 * 14344392.0) as i32; //14344392 is the number of passwords in the bruteforce list
                     io::stdin().read_line(&mut user_vars).expect("Failed to read user input!");
                     let args: Vec<&str> = user_vars.split(',').collect();
                     if args.get(1).is_some() && args[1].trim().to_lowercase().parse::<i32>().is_ok() && args[1] != "0" { //check if 2 args are given, if not we will default to 5.
-                        bfl = (args[1].trim().to_lowercase().parse::<i32>().unwrap() as f64 / 100.0 * 14344392.0) as i32;
+                        bfl = (args[1].trim().to_lowercase().parse::<i32>().unwrap() as f64 / 100.0 * 14344392.0) as i32; //14344392 is the number of passwords in the bruteforce list
                         let out = ciphers::bruteforce_vigenere(&args[0],bfl);
                         let _ = join!(out);
                         

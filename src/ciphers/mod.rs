@@ -1,6 +1,5 @@
 use ascii::AsciiStr;
 use core::cmp::Ordering;
-use std::os::windows::thread;
 use modinverse::modinverse;
 use rand::Rng;
 use std::fs::File;
@@ -8,15 +7,8 @@ use std::io::{self, stdout, BufRead};
 use std::path::Path;
 use std::time::Instant;
 use std::io::Write;
-use std::rc::Rc;
-use anyhow::Error;
 use std::sync::{Arc,Mutex};
-use std::thread::*;
-use std::time::{Duration};
 use tokio::*;
-use rand::prelude::*;
-use futures::future::join_all;
-use std::fs::OpenOptions;
 
 const LOWERCASE_ASCII_OFFSET: i32 = 97;
 const UPPERCASE_ASCII_OFFSET: i32 = 65;
@@ -61,14 +53,14 @@ pub fn vigenere_cipher(message: &str, key: &str, enc_type: &str) -> String {
         let indexed_key = AsciiStr::from_ascii(key); 
         let idx_key = match indexed_key {
             Ok(val) => val,
-            Err(e) => {
+            Err(_e) => {
                 AsciiStr::from_ascii(default).unwrap()
             }
         };
 
         let key_ascii_arr = idx_key.as_slice();
         
-        if (key_ascii_arr.len() == 0) {
+        if key_ascii_arr.len() == 0 {
             return String::new();
         }
         for (_idx, current_char) in message.chars().enumerate() { //returns index and char for each char in message.
@@ -591,7 +583,7 @@ pub async fn bruteforce_vigenere(message: &str,bruteforce_limit:i32) -> io::Resu
     //same as above but vector
 
     //Creates a list of thread handles, breaks the password list into pieces of length 1000 for easier concurrency.
-    let handles: Vec<_> = rock_you.chunks(1000).enumerate().map(|(i,chunk)| {
+    let handles: Vec<_> = rock_you.chunks(1000).enumerate().map(|(_i,chunk)| {
         
         // Does some preliminary conversions. Clones the Arc data for safe access.
         let message = message.to_string();
