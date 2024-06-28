@@ -1,14 +1,22 @@
 use ascii::AsciiStr;
 use core::cmp::Ordering;
+use std::os::windows::thread;
 use modinverse::modinverse;
 use rand::Rng;
 use std::fs::File;
-use std::io::{self, BufRead};
+use std::io::{self, stdout, BufRead};
 use std::path::Path;
 use std::time::Instant;
 use std::io::Write;
-
-
+use std::rc::Rc;
+use anyhow::Error;
+use std::sync::{Arc,Mutex};
+use std::thread::*;
+use std::time::{Duration};
+use tokio::*;
+use rand::prelude::*;
+use futures::future::join_all;
+use std::fs::OpenOptions;
 
 const LOWERCASE_ASCII_OFFSET: i32 = 97;
 const UPPERCASE_ASCII_OFFSET: i32 = 65;
@@ -46,31 +54,42 @@ pub fn caesar_cipher(message: &str, shift: i32, enc_type: &str) -> String {
 pub fn vigenere_cipher(message: &str, key: &str, enc_type: &str) -> String {
     let mut result = String::new();
     let mut key_cursor:usize = 0;
+    let default:&str = "key";
 
-    for (_idx, current_char) in message.chars().enumerate() { //returns index and char for each char in message.
-        if key_cursor >= key.chars().count() { //If cursor is out of bounds (at the end of the key), reset it
-            key_cursor = 0;
-        }
 
         //Converts the key to ascii, then slices it into an array of ascii characters (so it's indexed properly)
-        let indexed_key = AsciiStr::from_ascii(key).unwrap(); 
-        let key_ascii_arr = indexed_key.as_slice();
+        let indexed_key = AsciiStr::from_ascii(key); 
+        let idx_key = match indexed_key {
+            Ok(val) => val,
+            Err(e) => {
+                AsciiStr::from_ascii(default).unwrap()
+            }
+        };
+
+        let key_ascii_arr = idx_key.as_slice();
         
-
-        let mut shift = 0;
-
-        //Grab the value of the key as an integer, subtract the base ascii offset for lowercase characters and save it as the shift value. 
-        //Decrypt is same but shift becomes negative
-        if enc_type.contains("enc") {
-            shift = (key_ascii_arr[key_cursor] as i32) - LOWERCASE_ASCII_OFFSET;
-        } else if enc_type.contains("dec") {
-            shift = -((key_ascii_arr[key_cursor] as i32) - LOWERCASE_ASCII_OFFSET);
+        if (key_ascii_arr.len() == 0) {
+            return String::new();
         }
+        for (_idx, current_char) in message.chars().enumerate() { //returns index and char for each char in message.
+            if key_cursor >= key_ascii_arr.len() { //If cursor is out of bounds (at the end of the key), reset it
+                key_cursor = 0;
+            }
 
-        key_cursor += 1;
-        println!("Shifted to char: {}, {}", &shift_char(current_char, shift).to_string(), shift_char(current_char, shift) as u8);
-        result += &shift_char(current_char, shift).to_string(); //Finally, add the shifted char as a string, to result.
-    }
+            let mut shift = 0;
+
+            //Grab the value of the key as an integer, subtract the base ascii offset for lowercase characters and save it as the shift value. 
+            //Decrypt is same but shift becomes negative
+            if enc_type.contains("enc") {
+                shift = (key_ascii_arr[key_cursor] as i32) - LOWERCASE_ASCII_OFFSET;
+            } else if enc_type.contains("dec") {
+                shift = -((key_ascii_arr[key_cursor] as i32) - LOWERCASE_ASCII_OFFSET);
+            }
+
+            key_cursor += 1;
+            //println!("Shifted to char: {}, {}", &shift_char(current_char, shift).to_string(), shift_char(current_char, shift) as u8);
+            result += &shift_char(current_char, shift).to_string(); //Finally, add the shifted char as a string, to result.
+        }
     result
 }
 
@@ -344,73 +363,102 @@ pub fn railfence_cipher(message: &str, rails: i32, enc_type: &str) -> String {
 
 }  
 
-//Scores likelihood that a string is plain english and thus decoded, based on relative frequencies of letters, bigrams, trigrams, first characters, and last characters in words.
+//Scores likelihood that a string is plain english and thus decoded, based on relative frequencies of letters, common english words, bigrams (not yet), trigrams (not yet), first characters, and last characters in words.
 pub fn score_string(message: &str, word_list: &Vec<String>) -> f64 {
-    let mut result_counts: Vec<i32> = vec![0;26];
-    let mut result_weights: Vec<f64> = vec![0.0;26];
-    let message = &message.to_lowercase();
+
+    let mut result_counts: Vec<i32> = vec![0;26]; //tracks count for each alphabetic character 
+    let mut result_weights: Vec<f64> = vec![0.0;26]; //tracks weight relative to total char count, for each alphabetic character
+
+    let message = &message.to_lowercase(); //turns message lowercase
+
     let char_count_total = message.chars().count() as i32;
-    let mut diff_score = 0.0;
-    let mut new_word:bool = true; //assume first char is a new word
+
+    let mut likelihood_of_english_score = 0.0; //likelihood of a message being english (as a percentage)
+
+    let mut new_word:bool = true; //Tracks if current word is a new word, for first letter weight comparisons
     let mut previous_char: char = 'x'; //previous word is tracked for end of word letter comparisons
-    //println!("CURRENT DIR: {}", current_dir().unwrap().display());
+
+    //counts the # of found common words
+    let mut counter = 0;
     for i in word_list {
         if message.contains(i) {
-            //println!("Message contains {} so we are modifying diff by: {}\n",i, (-0.30 / char_count_total as f64 * 100.0));
-            diff_score -= 0.30 / (char_count_total as f64); //If there are common english words then it's far more likely that it's an english output
+            counter += 1; 
         }
     }
+    //Calculates the hit rate of common words per size of string
+    let hit_rate = (counter as f64 * 3.0) / (char_count_total as f64); 
+    likelihood_of_english_score += 0.20 * hit_rate;
 
+    //alpha counter counts alphabetic chars, new_word_counter counts the # of total words. First and last_letter_likelihood track sum weights
+    let mut alphacounter = 0;
+    let mut new_word_counter = 0;
+    let mut first_letter_likelihood = 0.0;
+    let mut last_letter_likelihood = 0.0;
+
+    //for each alpha char, get the char value as an int (0 to 25), increment char count, and increment alpha counter
     for c in message.chars() {
         if c.is_alphabetic() {
             let current_char_int = ((c as u8) as i32) - LOWERCASE_ASCII_OFFSET;
             let char_count = result_counts[current_char_int as usize] + 1; //increment the count
-            result_counts[current_char_int as usize] = char_count; //set the result count of the given char's int value to the new count
-            //println!("Message contains alphabetic'{}' so we are modifying diff by: {}\n",c, (-0.04 / char_count_total as f64 * 100.0));
-            diff_score -= 0.02 / char_count_total as f64;
+            result_counts[current_char_int as usize] = char_count; //Set to incremented value
+            alphacounter += 1; 
         }
-        else { //If it's not alphabetic then it's more likely to be part of ciphertext, so slightly increment the different-ness for each non-alpha char.
-        //println!("Message contains nonalphabetic '{}' so we are modifying diff by: {}\n",c, (0.15 / char_count_total as f64 * 100.0));
-            diff_score += 0.15 / char_count_total as f64;
-        }
+
+        //If new word is set then the previous char was whitespace or it's the start of the message. Get likelihood and sum the likelihood of each first letter.
         if new_word {
             for &(letter,score) in FIRST_LETTER_LIKELIHOOD.iter() {
                 if letter == c {
-                    //println!("Message word starts with common letter '{}' so we are modifying diff by: {}\n",c, (-score / char_count_total as f64 * 100.0));
-                    diff_score -= score / char_count_total as f64;
+                    first_letter_likelihood += score;
                 }
             }
         }
+
+        //If current char is whitespace, increment new_word counter, set new word to true for the next char so first letter can be examined.
         if c.is_whitespace() {
             new_word = true; //next word will be a new word
+            new_word_counter+=1;
             for &(letter,score) in LAST_LETTER_LIKELIHOOD.iter() {
+                //Since this is the start of a new word, get the previous char and compare it, and sum the last char likelihood.
                 if letter == previous_char {
-                    //println!("Message word ends with common letter '{}' so we are modifying diff by: {}\n",c, (-score / char_count_total as f64 * 100.0));
-                    diff_score -= score / char_count_total as f64;
+                    last_letter_likelihood += score;
                 }
             }
         } else {
             new_word = false;
-        }; //set for next char whether it should be examined as beginning of word or not.
-        previous_char = c;
+        };
+        previous_char = c; //track previous char
     }
-    for i in 0..result_counts.len() { //for each alphabetical letter we now get the weight
+
+    //More alphabetic chars = more likely to be english
+    let alphabetic_rate = (alphacounter as f64) / (char_count_total as f64); 
+    likelihood_of_english_score += 0.30 * alphabetic_rate;
+
+    //Calculates first and last char based on the 'perfect score' for a word starting with and ending with the most common chars (t and e)
+    let first_last_probability_score = (last_letter_likelihood + first_letter_likelihood) / 0.3511;
+    likelihood_of_english_score += 0.20 * (first_last_probability_score / (new_word_counter as f64 - 1.0)); //divide by the perfect score to get a ratio.
+    
+    //for each alphabetical letter we now get the individual character counts adjusted for the total char count (this is the frequency)
+    for i in 0..result_counts.len() {
         result_weights[i as usize] = result_counts[i as usize] as f64 / char_count_total as f64;
     }
 
-    //Now we have array result_counts containing a vector of weights for each character, in alphabetic order
+    //Now we have array result_counts containing a vector of frequency weights for each character, in alphabetic order
     //Next we find the difference between each
+    let mut letter_weight_diffs = 0.0;
     for i in 0..result_weights.len() {
-        if result_weights[i as usize] != 0.0 {
-            diff_score += (LETTER_LIKELIHOOD[i as usize] - result_weights[i as usize]).abs() * 2.0 / char_count_total as f64;
-            //println!("Character number '{}' has a different weight from the norm, so we are modifying diff by: {}\n",i, ((LETTER_LIKELIHOOD[i as usize] - result_weights[i as usize]).abs() * 2.0 * 100.0 / char_count_total as f64));
-        }
+            letter_weight_diffs += (LETTER_LIKELIHOOD[i as usize] - result_weights[i as usize]).abs(); 
+            //a score of 1 means entirely different for all characters, 0 = perfect theoretical english
+        
     }
-    diff_score * 100.0
+    //Since 1 is entirely different, we take the complement because lower scores are better.
+    likelihood_of_english_score += 0.30 * (1.0 - letter_weight_diffs);
+
+    //Finally we convert to a % and return
+    likelihood_of_english_score * 100.0
 }
 
 pub fn read_lines<P>(filename: P) -> io::Result<io::Lines<io::BufReader<File>>> where P: AsRef<Path>, {
-    let file = File::open(filename)?;
+    let file = File::open(filename)?; //open the file and read the lines
     Ok(io::BufReader::new(file).lines())
 }
 
@@ -487,17 +535,18 @@ pub fn bruteforce(message: &str, enc_type: &str) -> String {
         }
     }
 
-    results.sort_by(|a, b| a.0.partial_cmp(&b.0).unwrap_or(Ordering::Equal));
+    results.sort_by(|a, b| b.0.partial_cmp(&a.0).unwrap_or(Ordering::Equal)); //Do a comparison to sort and get the best results.
 
     results.dedup_by_key(|k| k.1.clone()); //remove duplicates
 
     println!("Most likely results: ");
     println!("\n"); //higher numbers are more different from english and thus less likely to be the plaintext result.
+
     let output_file = File::create("bruteForceResults.txt").unwrap();
-    for (score, message, type_of_cipher) in results.iter().take(50) {
+    for (score, message, type_of_cipher) in results.iter().take(50) { //put the top 50 most likely results in the chat
         println!("({:.2}): {} [{}]\n", score, message.trim(), type_of_cipher.trim());
     }
-    for (score, message, type_of_cipher) in results.iter() { 
+    for (score, message, type_of_cipher) in results.iter() {  //put the other attempts in the brute force results file
         let line_str = format!("({:.2}): {} [{}]\n", score, message.trim(), type_of_cipher.trim());
         write!(&output_file, "{}", line_str).unwrap();
     }
@@ -507,13 +556,104 @@ pub fn bruteforce(message: &str, enc_type: &str) -> String {
 
 }
 
-pub fn bruteforce_vigenere (message: &str) -> String {//unknown or caesar. Quick to test as there are only 26 possible shifts.
-        println!("Checking vigenere ciphers...");
-        let mut current: String;
-        // for i in 0..=26 { //0 to 26 inclusive
-        //     current = vigenere_cipher();
-        //     results.push((score_string(&current,&wordlist), current, "Vigenere".to_string())); //push data as tuple
-        // }
-        return String::new();
+pub async fn bruteforce_vigenere(message: &str,bruteforce_limit:i32) -> io::Result<()> {
+    println!("Checking vigenere ciphers...");
+    let now = Instant::now(); //to track time elapsed
+    
+    //gets list of common passwords to attempt to brute force. Also allows for limiting by bruteforce limit since the file is huge. Converts it to a vector for easy access.
+    async fn get_password_list (bruteforce_limit:i32) -> io::Result<Vec<String>> {
+        let mut password_list: Vec<String> = vec![];
+        if let Ok(lines) = read_lines("src/data/rockyou.txt") {
+            // Consumes the iterator, returns an (Optional) String
+            for line in lines.flatten().take(bruteforce_limit.clone() as usize){ //take only the specified line count
+                password_list.push(line);
+            }
+
+        } else {println!("Directory not found - passwords!")}
+        Ok(password_list)
+    }
+    
+    println!("Loading passkey bruteforce list...");
+    let rock_you = match get_password_list(bruteforce_limit).await {
+        Ok(list) => list,
+        Err(e) => {
+            eprintln!("There was an error reading the password list: {:?}", e);
+            return Err(e)
+        }
+    };
+    //
+
+    println!("Starting decryption attempt...");
+
+    let thread_counter = Arc::new(Mutex::new(0)); //thread counter, mutex allows us to lock or unlock it for mutually exclusive access
+    //arc allows it to be accessed for concurrent use.
+    let results: Arc<Mutex<Vec<(f64, String, String)>>> = Arc::new(Mutex::new(vec![]));
+    //same as above but vector
+
+    //Creates a list of thread handles, breaks the password list into pieces of length 1000 for easier concurrency.
+    let handles: Vec<_> = rock_you.chunks(1000).enumerate().map(|(i,chunk)| {
+        
+        // Does some preliminary conversions. Clones the Arc data for safe access.
+        let message = message.to_string();
+        let chunk = chunk.to_vec();        
+        let results = Arc::clone(&results);
+        let thread_counter = Arc::clone(&thread_counter);
+
+        //Spawns tokio tasks to carry out the actual brute forcing
+        task::spawn(async move {
+
+            let mut wordlist: Vec<String> = vec![];
+            
+            //Outputs the % finished amount
+            let mut thread_counter = thread_counter.lock().unwrap();
+            *thread_counter += 1;
+            let pct = *thread_counter as f64 * 100.0 / (bruteforce_limit as f64 / 1000.0);
+            print!("\r{}% done...", pct.floor());
+            let _ = stdout().flush();
+
+            //Get the 1000 most common words to give to score_string
+            if let Ok(lines) = read_lines("src/data/1000_most_common.txt") {
+            for line in lines.flatten() {
+                wordlist.push(line);
+            }
+        } else {println!("Directory not found - common words!")}
+
+        //Lock results so we can access it, similar to counter earlier
+        let mut results = results.lock().unwrap();
+        for j in 0..chunk.len() { //for each part of the chunk we attempt to cipher it then push the data to the results vector
+            let current = vigenere_cipher(&message,&chunk[j],"dec");
+            results.push((score_string(&current,&wordlist), current, (format!("Vigenere - {}",&chunk[j])))); //push data as tuple
+        }
+
+        })
+    }).collect();
+
+    //joins the handles
+    for handle in handles {
+        handle.await.unwrap();
+    }
+
+    println!("\nSee bruteForceResults.txt for more, or increase the password limit if key was not found.\n");
+
+    //Sort and remove duplicates from results
+    let mut results = results.lock().unwrap();
+    results.sort_by(|a, b| b.0.partial_cmp(&a.0).unwrap_or(Ordering::Equal));
+    results.dedup_by_key(|k| k.1.clone()); //remove duplicates
+
+    println!("Most likely results: ");
+
+    //Create file. Post the top 50 results to the console and the top 5000 to the result file.
+    let output_file = File::create("bruteForceResults.txt").unwrap();
+    for (score, message, type_of_cipher) in results.iter().take(50) {
+        println!("({:.2}): {} [{}]\n", score, message.trim(), type_of_cipher.trim());
+    }
+    for (score, message, type_of_cipher) in results.iter().take(5000) { 
+        let line_str = format!("({:.2}): {} [{}]\n", score, message.trim(), type_of_cipher.trim());
+        write!(&output_file, "{}", line_str).unwrap();
+    }
+    
+    println!("\nFinished! Total time elapsed: {} seconds. Total passwords checked: {}", now.elapsed().as_secs(),bruteforce_limit);
+
+    Ok(())
 
 }

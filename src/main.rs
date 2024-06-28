@@ -1,9 +1,13 @@
 use std::io;
 use std::env;
+
+use futures::future::join_all;
+use futures::join;
 mod ciphers;
 
 /// Main driver logic for user input
-fn main() {
+#[tokio::main]
+async fn main() {
     env::set_var("RUST_BACKTRACE", "1");
     loop {
         println!("Hello! What would you like to do today? Say 'help' to see cipher options, 'bruteforce' to attempt a bruteforce, or 'exit' to exit.");
@@ -60,7 +64,7 @@ fn main() {
                     println!("Please try selecting a cipher again.");
                 }
             }
-            opt if opt.contains("vig") => {
+            opt if opt.contains("vig") && !opt.contains("bru") => {
                 println!("A vigenere cipher is a common polyalphabetic substitution cipher that shifts letters by \
                 the values of a repeating key. Is this what you would like to do?");
 
@@ -244,8 +248,8 @@ fn main() {
                     println!("Please try selecting a cipher again.");
                 }
             }
-            opt if opt.contains("bru") => {
-                println!("This will attempt a bruteforce on a string encoded using one of the available cipher types. Note that vigenere will take much longer than others, and may not be possible given a secure enough key. Is this what you would like to do?");
+            opt if opt.contains("bru") && !opt.contains("vig") => {
+                println!("This will attempt a bruteforce on a string encoded using one of the available cipher types. Is this what you would like to do?");
 
                 //read input
                 io::stdin().read_line(&mut user_choice).expect("Failed to read user input!");
@@ -267,6 +271,7 @@ fn main() {
             }
             opt if opt.contains("sco") => {
                 println!("This will score a string. Enter a string to score.");
+                let mut user_choice = String::new();
                 io::stdin().read_line(&mut user_choice).expect("Failed to read user input!");
 
                 let mut word_list: Vec<String> = vec![];
@@ -278,7 +283,31 @@ fn main() {
                 } else {println!("Directory not found!")}
                 println!("The score for this string is: {}", ciphers::score_string(&user_choice, &word_list))
             }
+            opt if opt.contains("bru") && opt.contains("vig") => {
+                println!("This will attempt a bruteforce on a string encoded with vigenere. Note that vigenere will take a long time, and may not be possible given a secure enough key. Is this what you would like to do?");
 
+                //read input
+                io::stdin().read_line(&mut user_choice).expect("Failed to read user input!");
+
+                let valid_yes_options = ["y"];
+                if valid_yes_options.iter().any(|&option| user_choice.trim().to_lowercase().contains(option)) { 
+                    println!("Please enter the encrypted text and a security level from 0 to 100 separated by a comma. Higher security levels will check more passwords but will take much longer. 5 is a good start for weak passwords. For example, \"encryptedmessage,5\"");
+                    let mut bfl = (5.0 / 100.0 * 14344392.0) as i32;
+                    io::stdin().read_line(&mut user_vars).expect("Failed to read user input!");
+                    let args: Vec<&str> = user_vars.split(',').collect();
+                    if args.get(1).is_some() && args[1].trim().to_lowercase().parse::<i32>().is_ok() && args[1] != "0" { //check if 2 args are given, if not we will default to 5.
+                        bfl = (args[1].trim().to_lowercase().parse::<i32>().unwrap() as f64 / 100.0 * 14344392.0) as i32;
+                        let out = ciphers::bruteforce_vigenere(&args[0],bfl);
+                        let _ = join!(out);
+                        
+                    } else {
+                        let out = ciphers::bruteforce_vigenere(&args[0],bfl);
+                        let _ = join!(out);
+                    }
+                } else {
+                    println!("Please try selecting a cipher again.");
+                }
+            }
             opt if opt.contains("help") => {
                 println!("Enter a valid cipher option. Valid options include the following:\n\n
 caesar cipher: shift characters by integer shift key,\n
@@ -287,7 +316,9 @@ atbash cipher: reverse characters (a => z, b => y, ...),\n
 Affine cipher: Performs *a+b on chars to encrypt, /a-b to decrypt,\n
 Baconian cipher: Encodes text as an integer stream which represents binary,\n
 Railfence cipher: Shuffles the order of the characters using a zig-zag pattern along a # of rails, which act as the key,\n
-ROT13 cipher: shift characters by 13 places,\n\n
+ROT13 cipher: shift characters by 13 places,\n
+
+You can also enter bruteforce to bruteforce any cipher other than vigenere, or bruteforce vigenere to bruteforce a vigenere cipher.\n
 Note: You don't need to enter the full name, you only have to enter enough of the name to register as uniquely one cipher (ie, cae and vig both will work)\n");
             }
             opt if opt.contains("exit") => {
