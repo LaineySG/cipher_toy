@@ -9,6 +9,7 @@ use std::time::Instant;
 use std::io::Write;
 use std::sync::{Arc,Mutex};
 use tokio::*;
+use std::ops::Index;
 
 const LOWERCASE_ASCII_OFFSET: i32 = 97;
 const UPPERCASE_ASCII_OFFSET: i32 = 65;
@@ -21,6 +22,14 @@ const LETTER_LIKELIHOOD: [f64;26] = [
 
 const FIRST_LETTER_LIKELIHOOD: [(char, f64);10] = [('t',0.1594),('a',0.1550),('i',0.0823),('s',0.0775),('o',0.0712),('c',0.0597),('m', 0.0426),('f',0.0408),('p',0.0400),('w',0.0382)]; //unwrap option or set to unknown encryption type
 const LAST_LETTER_LIKELIHOOD: [(char, f64);10] = [('e',0.1917),('s',0.1435),('d',0.0923),('t',0.0864),('n',0.0786),('y',0.0730),('r', 0.0693),('o',0.0467),('l',0.0456),('f',0.0408)]; //unwrap option or set to unknown encryption type
+
+const POLYBIUS_SQUARE: [[char;5];5] = [ //5 by 5 square for the polybius cipher
+    ['a','b','c','d','e'],
+    ['f','g','h','i','j'],
+    ['k','l','m','n','o'], 
+    ['p','q','r','s','t'],
+    ['u','v','w','x','y']];
+
 
 /// Shifts character while keeping it in a safe range of characters (stopping newline and other weird ascii chars as well as potential overflow)
 pub fn shift_char(c: char, shift: i32) -> char {
@@ -485,6 +494,12 @@ pub fn bruteforce(message: &str, enc_type: &str) -> String {
         current = rot13_cipher(message);
         results.push((score_string(&current,&wordlist), current, "ROT13".to_string())); //push data as tuple
     }
+    if enc_type.contains("unk") || enc_type.contains("pol") {
+        println!("Checking Polybius cipher...");
+        let current: String;
+        current = polybius_cipher(message,"dec");
+        results.push((score_string(&current,&wordlist), current, "Polybius".to_string())); //push data as tuple
+    }
     
     if enc_type.contains("unk") || enc_type.contains("aff"){
         println!("Checking Affine cipher...");
@@ -649,3 +664,54 @@ pub async fn bruteforce_vigenere(message: &str,bruteforce_limit:i32) -> io::Resu
     Ok(())
 
 }
+
+pub fn polybius_cipher(message: &str, enc_type: &str) -> String {
+    let message = &message.to_lowercase(); //turns message lowercase
+    let mut result:String = String::new();
+    if enc_type.contains("enc") {
+        for c in message.chars() {
+            let mut found:bool = false;
+                for j in 0..5 {
+                    if POLYBIUS_SQUARE[j].contains(&c) { //if that row of the square contains the character
+                        found = true;
+
+                        let index = POLYBIUS_SQUARE[j].iter().position(|&x| x == c).unwrap(); //checks for equality to find the index
+                        if j >= 4 { //we don't want an out-of-bounds j for the index so we wrap the value
+                            result += &POLYBIUS_SQUARE[0][index].to_string();
+                        } else {
+                            result += &POLYBIUS_SQUARE[j+1][index].to_string();
+                        }
+                }
+            }
+            if !found { //if non alphabetical char
+                result += &c.to_string();
+            }
+        }
+    } else { //decryption
+        for c in message.chars() {
+            let mut found = false;
+            for j in 0..5 {
+                if POLYBIUS_SQUARE[j].contains(&c) { //if that row of the square contains the character
+                    found = true;
+
+                    let index = POLYBIUS_SQUARE[j].iter().position(|&x| x == c).unwrap(); //checks for equality to find the index
+                    if j == 0 { //we can't get a negative j for the index so we wrap the value
+                        result += &POLYBIUS_SQUARE[4][index].to_string();
+                    } else {
+                        result += &POLYBIUS_SQUARE[j-1][index].to_string();
+                    }
+            }
+            }
+            if !found { //if non alphabetical char
+                result += &c.to_string();
+            }
+        }
+    }
+    result
+}
+
+
+
+
+
+

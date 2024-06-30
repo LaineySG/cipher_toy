@@ -306,15 +306,52 @@ async fn main() {
                     println!("Please try selecting a cipher again.");
                 }
             }
+
+            opt if opt.contains("pol") => {
+                println!("A Polybius cipher is a monoalphabetic cipher that shifts values by one row according to a 5x5 alphabetic table. Is this what you would like to do?");
+
+                //read input
+                io::stdin().read_line(&mut user_choice).expect("Failed to read user input!");
+
+
+                let valid_yes_options = ["y"];
+                if valid_yes_options.iter().any(|&option| user_choice.trim().to_lowercase().contains(option)) { 
+                    println!("Please enter a comma separated list consisting of your message and whether you will be \
+                    encrypting or decrypting the message. For example, \"secretmessage,enc\"");
+    
+                    io::stdin().read_line(&mut user_vars).expect("Failed to read user input!");
+                    let args: Vec<&str> = user_vars.split(',').collect();
+                    if let Some(val) = args.get(1) { //make sure there are 2 given values
+                        let valid_type_options = ["enc","dec"];
+                        if valid_type_options.iter().any(|&option| val.trim().to_lowercase().contains(option)) { 
+                                let result = ciphers::polybius_cipher(args[0],val);
+                                let result_description = match val { //match input to get a nice output
+                                    x if x.contains("enc") => "ciphertext",
+                                    x if x.contains("dec") => "plaintext",
+                                    _=> "output",
+                                };
+                                println!("Resulting {} is: \t {}",result_description,result);
+                        } else {
+                            println!("Couldn't locate 'enc' or 'dec' in reply!");
+                        }
+                    } else {
+                        println!("Please enter a proper number of arguments");
+                    }
+                } else {
+                    println!("Please try selecting a cipher again.");
+                }
+            }
+
             opt if opt.contains("help") => {
                 println!("Enter a valid cipher option. Valid options include the following:\n\n
-caesar cipher: shift characters by integer shift key,\n
-vigenere cipher: shift characters by repeating string key,\n
-atbash cipher: reverse characters (a => z, b => y, ...),\n
+caesar cipher: Shift characters by integer shift key,\n
+vigenere cipher: Shift characters by repeating string key,\n
+atbash cipher: Reverse characters (a => z, b => y, ...),\n
 Affine cipher: Performs *a+b on chars to encrypt, /a-b to decrypt,\n
 Baconian cipher: Encodes text as an integer stream which represents binary,\n
+Polybius cipher: Encodes text by substituting values according to a table,\n
 Railfence cipher: Shuffles the order of the characters using a zig-zag pattern along a # of rails, which act as the key,\n
-ROT13 cipher: shift characters by 13 places,\n
+ROT13 cipher: Shift characters by 13 places,\n
 
 You can also enter bruteforce to bruteforce any cipher other than vigenere, or bruteforce vigenere to bruteforce a vigenere cipher.\n
 Note: You don't need to enter the full name, you only have to enter enough of the name to register as uniquely one cipher (ie, cae and vig both will work)\n");
