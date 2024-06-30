@@ -19,6 +19,7 @@ const LETTER_LIKELIHOOD: [f64;26] = [
     0.06966, 0.00153, 0.00772, 0.04025, 0.02406, 0.06749, 0.07507, 0.01929, 
     0.00095, 0.05987, 0.06327, 0.09056, 0.02758, 0.00978, 0.02360, 0.00150, 
     0.01974, 0.00074];
+const AVG_ENGL_WORD_LENGTH: f64 = 4.7;
 
 const FIRST_LETTER_LIKELIHOOD: [(char, f64);10] = [('t',0.1594),('a',0.1550),('i',0.0823),('s',0.0775),('o',0.0712),('c',0.0597),('m', 0.0426),('f',0.0408),('p',0.0400),('w',0.0382)]; //unwrap option or set to unknown encryption type
 const LAST_LETTER_LIKELIHOOD: [(char, f64);10] = [('e',0.1917),('s',0.1435),('d',0.0923),('t',0.0864),('n',0.0786),('y',0.0730),('r', 0.0693),('o',0.0467),('l',0.0456),('f',0.0408)]; //unwrap option or set to unknown encryption type
@@ -273,16 +274,17 @@ pub fn baconian_cipher(message:&str, enc_type: &str) -> String {
 
 ///Transpositional cipher that shuffles each character as though it is placed in a zig-zag pattern along a rail.
 pub fn railfence_cipher(message: &str, rails: i32, enc_type: &str) -> String {
+    let message = &message.trim();
     let mut rail_matrix:Vec<Vec<char>> = vec![];
     let mut result = String::new();
     result.push('\'');
-    let mut cursor:usize = 0;
     enum Direction {UP,DOWN}
     let mut current_direction = Direction::DOWN;
 
     for _i in 0..rails {
         rail_matrix.push(vec![]); //add a row for each rail
     }
+    let mut cursor:usize = 0;
     if enc_type.contains("enc") {
         for c in message.chars() {
             rail_matrix[cursor].push(c);
@@ -332,7 +334,7 @@ pub fn railfence_cipher(message: &str, rails: i32, enc_type: &str) -> String {
         let mut message_cursor = 0;
         for i in 0..rails {
             for j in 0..message.chars().count() {
-                if rail_matrix[i as usize][j as usize] == '*' && cursor < message.chars().count() {
+                if rail_matrix[i as usize][j as usize] == '*' && message_cursor < message.chars().count() {
                     rail_matrix[i as usize][j as usize] = message_ascii_arr[message_cursor].as_char();
                     message_cursor += 1;
                 }
@@ -366,11 +368,11 @@ pub fn railfence_cipher(message: &str, rails: i32, enc_type: &str) -> String {
 
 //Scores likelihood that a string is plain english and thus decoded, based on relative frequencies of letters, common english words, bigrams (not yet), trigrams (not yet), first characters, and last characters in words.
 pub fn score_string(message: &str, word_list: &Vec<String>) -> f64 {
-
+    
     let mut result_counts: Vec<i32> = vec![0;26]; //tracks count for each alphabetic character 
     let mut result_weights: Vec<f64> = vec![0.0;26]; //tracks weight relative to total char count, for each alphabetic character
-
-    let message = &message.to_lowercase(); //turns message lowercase
+    let mut first_char = true;
+    let message = &message.trim().to_lowercase(); //turns message lowercase and trims whitespace
 
     let char_count_total = message.chars().count() as i32;
 
@@ -395,7 +397,9 @@ pub fn score_string(message: &str, word_list: &Vec<String>) -> f64 {
     let mut new_word_counter = 0;
     let mut first_letter_likelihood = 0.0;
     let mut last_letter_likelihood = 0.0;
-
+    let mut wordlength: i32 = 0;
+    let mut wordlengths: Vec<i32> = vec![];
+    let mut average_wordsize: f64 = 0.0;
     //for each alpha char, get the char value as an int (0 to 25), increment char count, and increment alpha counter
     for c in message.chars() {
         if c.is_alphabetic() {
@@ -403,6 +407,9 @@ pub fn score_string(message: &str, word_list: &Vec<String>) -> f64 {
             let char_count = result_counts[current_char_int as usize] + 1; //increment the count
             result_counts[current_char_int as usize] = char_count; //Set to incremented value
             alphacounter += 1; 
+        } else if  first_char { //if first word is non-alphabetic, increment new word counter
+            new_word_counter+=1;
+            first_char = false;
         }
 
         //If new word is set then the previous char was whitespace or it's the start of the message. Get likelihood and sum the likelihood of each first letter.
@@ -424,19 +431,33 @@ pub fn score_string(message: &str, word_list: &Vec<String>) -> f64 {
                     last_letter_likelihood += score;
                 }
             }
+            wordlengths.push(wordlength); //add word's length to counter
+            wordlength = 0; //reset wordlength
         } else {
             new_word = false;
+            wordlength += 1; //add 1 to wordlength counter
         };
         previous_char = c; //track previous char
     }
 
+    wordlengths.push(wordlength); //add last word's length to counter after finishing the string
+
+    for i in 0..wordlengths.len() {
+        let mut length_diff = (wordlengths[i] as f64 - AVG_ENGL_WORD_LENGTH).abs(); //get the length diff
+        length_diff = length_diff.powf(1.3);
+        average_wordsize += length_diff
+    }
+    average_wordsize = average_wordsize / new_word_counter as f64;
+    //smaller average wordsize diff is better (should be as close to 0 as possible)
+    likelihood_of_english_score += 0.10 * (1.0 - (average_wordsize / 8.0)); //if average is over 8 diff it's unlikely to be english
+
     //More alphabetic chars = more likely to be english
     let alphabetic_rate = (alphacounter as f64) / (char_count_total as f64); 
-    likelihood_of_english_score += 0.30 * alphabetic_rate;
+    likelihood_of_english_score += 0.25 * alphabetic_rate;
 
     //Calculates first and last char based on the 'perfect score' for a word starting with and ending with the most common chars (t and e)
     let first_last_probability_score = (last_letter_likelihood + first_letter_likelihood) / 0.3511;
-    likelihood_of_english_score += 0.20 * (first_last_probability_score / (new_word_counter as f64 - 1.0)); //divide by the perfect score to get a ratio.
+    likelihood_of_english_score += 0.15 * (first_last_probability_score / (new_word_counter as f64 - 1.0)); //divide by the perfect score to get a ratio.
     
     //for each alphabetical letter we now get the individual character counts adjusted for the total char count (this is the frequency)
     for i in 0..result_counts.len() {
@@ -525,7 +546,6 @@ pub fn bruteforce(message: &str, enc_type: &str) -> String {
         results.push((score_string(&current,&wordlist), current, "Bacon".to_string())); //push data as tuple
     }
     if enc_type.contains("unk") || enc_type.contains("rai"){ 
-        //railfence has a weird bug where it doesn't work unless 'rai' is specified, probably some kind of memory bug- fix later
         println!("Checking Railfence cipher...");
         for rails in 2..2000 {
             match rails {
@@ -535,10 +555,10 @@ pub fn bruteforce(message: &str, enc_type: &str) -> String {
                 2500 =>{println!("85%...")},
                 _ =>{},
             }
-
             let current = railfence_cipher(message,rails,"dec");
             let temp = format!("Railfence[{}]",rails);
-            results.push((score_string(&current,&wordlist), current, temp.clone())); //push data as tuple
+            let rail_msg = &current[1..current.len()-1]; //removes apostrophes from rail message before scoring 
+            results.push((score_string(&rail_msg,&wordlist), current, temp.clone())); //push data as tuple
         }
     }
 
