@@ -342,6 +342,42 @@ async fn main() {
                 }
             }
 
+            opt if opt.contains("sim") => {
+                println!("A simple subsitution cipher is a common monoalphabetic substitution cipher that shifts letters by random values seeded by a given key password. Is this what you would like to do?");
+
+                //read input
+                io::stdin().read_line(&mut user_choice).expect("Failed to read user input!");
+
+
+                let valid_yes_options = ["y"]; //creates array of valid options
+
+                if valid_yes_options.iter().any(|&option| user_choice.trim().to_lowercase().contains(option)) { 
+                    //Checks if either option is contained in the user's selection
+
+                    println!("Please enter a comma separated list consisting of your message, the shift value, and whether you will be \
+                    encrypting or decrypting the message. For example, \"secretmessage,8,enc\"");
+    
+                    io::stdin().read_line(&mut user_vars).expect("Failed to read user input!");
+                    let args: Vec<&str> = user_vars.split(',').collect(); //split args by comma to get array of user inputted values
+                    let valid_type_options = ["enc","dec"];
+                    if let Some(val) = args.get(2) { //make sure there are 3 given values
+                        if valid_type_options.iter().any(|&option| val.trim().to_lowercase().contains(option)) { 
+                                    let result = ciphers::simplesub_cipher(args[0],args[1],val);
+                                    let result_description = match val {
+                                        x if x.contains("enc") => "ciphertext",
+                                        x if x.contains("dec") => "plaintext",
+                                        _=> "output",
+                                    };
+                                    println!("Resulting {} is: \t {}",result_description,result);
+                        } else {
+                            println!("Please enter a proper number of arguments");
+                        }
+                    }
+                } else {
+                    println!("Please try selecting a cipher again.");
+                }
+            }
+
             opt if opt.contains("help") => {
                 println!("Enter a valid cipher option. Valid options include the following:\n\n
 caesar cipher: Shift characters by integer shift key,\n
@@ -350,10 +386,11 @@ atbash cipher: Reverse characters (a => z, b => y, ...),\n
 Affine cipher: Performs *a+b on chars to encrypt, /a-b to decrypt,\n
 Baconian cipher: Encodes text as an integer stream which represents binary,\n
 Polybius cipher: Encodes text by substituting values according to a table,\n
+Simple Substitution cipher: Encodes text by substituting values according to a seeded shuffle,\n
 Railfence cipher: Shuffles the order of the characters using a zig-zag pattern along a # of rails, which act as the key,\n
 ROT13 cipher: Shift characters by 13 places,\n
 
-You can also enter bruteforce to bruteforce any cipher other than vigenere, or bruteforce vigenere to bruteforce a vigenere cipher.\n
+You can also enter bruteforce to bruteforce any cipher other than vigenere and simple-substitution, or bruteforce vigenere to bruteforce a vigenere cipher.\n
 Note: You don't need to enter the full name, you only have to enter enough of the name to register as uniquely one cipher (ie, cae and vig both will work)\n");
             }
             opt if opt.contains("exit") => {

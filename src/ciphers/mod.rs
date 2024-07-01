@@ -1,7 +1,8 @@
 use ascii::AsciiStr;
 use core::cmp::Ordering;
+use std::os::windows::thread;
 use modinverse::modinverse;
-use rand::Rng;
+use rand::{thread_rng, Rng};
 use std::fs::File;
 use std::io::{self, stdout, BufRead};
 use std::path::Path;
@@ -10,6 +11,10 @@ use std::io::Write;
 use std::sync::{Arc,Mutex};
 use tokio::*;
 use std::ops::Index;
+use rand_seeder::{Seeder, SipHasher};
+use rand_pcg::Pcg64;
+use rand::seq::SliceRandom;
+
 
 const LOWERCASE_ASCII_OFFSET: i32 = 97;
 const UPPERCASE_ASCII_OFFSET: i32 = 65;
@@ -366,7 +371,7 @@ pub fn railfence_cipher(message: &str, rails: i32, enc_type: &str) -> String {
 
 }  
 
-//Scores likelihood that a string is plain english and thus decoded, based on relative frequencies of letters, common english words, bigrams (not yet), trigrams (not yet), first characters, and last characters in words.
+///Scores likelihood that a string is plain english and thus decoded, based on relative frequencies of letters, common english words, bigrams (not yet), trigrams (not yet), first characters, and last characters in words.
 pub fn score_string(message: &str, word_list: &Vec<String>) -> f64 {
     
     let mut result_counts: Vec<i32> = vec![0;26]; //tracks count for each alphabetic character 
@@ -479,11 +484,13 @@ pub fn score_string(message: &str, word_list: &Vec<String>) -> f64 {
     likelihood_of_english_score * 100.0
 }
 
+///Reads each line from a file
 pub fn read_lines<P>(filename: P) -> io::Result<io::Lines<io::BufReader<File>>> where P: AsRef<Path>, {
     let file = File::open(filename)?; //open the file and read the lines
     Ok(io::BufReader::new(file).lines())
 }
 
+///Attempts to brute force any cipher type except vigenere
 pub fn bruteforce(message: &str, enc_type: &str) -> String {
     let mut wordlist: Vec<String> = vec![];
     if let Ok(lines) = read_lines("src/data/1000_most_common.txt") {
@@ -583,6 +590,7 @@ pub fn bruteforce(message: &str, enc_type: &str) -> String {
 
 }
 
+//Attempts to brute force a vigenere cipher
 pub async fn bruteforce_vigenere(message: &str,bruteforce_limit:i32) -> io::Result<()> {
     println!("Checking vigenere ciphers...");
     let now = Instant::now(); //to track time elapsed
@@ -685,6 +693,7 @@ pub async fn bruteforce_vigenere(message: &str,bruteforce_limit:i32) -> io::Resu
 
 }
 
+///Substitutes characters based on a polybius 5x5 table one row down
 pub fn polybius_cipher(message: &str, enc_type: &str) -> String {
     let message = &message.to_lowercase(); //turns message lowercase
     let mut result:String = String::new();
@@ -730,8 +739,34 @@ pub fn polybius_cipher(message: &str, enc_type: &str) -> String {
     result
 }
 
-
-
-
+//Substitutes based on a random shuffle amount
+pub fn simplesub_cipher(message: &str,seed: &str,enc_type: &str) -> String {
+    let mut alphabet: [char;26] = ['a','b','c','d','e','f','g','h','i','j','k','l','m','n','o','p','q','r','s','t','u','v','w','x','y','z'];
+    let mut rng: Pcg64 = Seeder::from(seed).make_rng();
+    alphabet.shuffle(&mut rng);
+    let mut result = String::new();
+    if enc_type.contains("enc") {
+        for c in message.chars() {
+            if c.is_lowercase() {
+                let ascii_decimal = (c as u8 as i32) - 97;
+                if ascii_decimal < 26 {
+                    result += &(alphabet[ascii_decimal as usize]).to_string();
+                }
+            } else {
+                result += &c.to_string();
+            }
+        }
+    } else {
+        for c in message.chars() {
+            if c.is_lowercase() {                  
+                let index = alphabet.iter().position(|&x| x == c).unwrap(); //get the index for character 'c'
+                result += &((index as i32 + 97) as u8 as char).to_string();
+            } else {
+                result += &c.to_string();
+            }
+        }
+    }
+    result
+}
 
 
