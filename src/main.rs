@@ -354,7 +354,7 @@ async fn main() {
                 if valid_yes_options.iter().any(|&option| user_choice.trim().to_lowercase().contains(option)) { 
                     //Checks if either option is contained in the user's selection
 
-                    println!("Please enter a comma separated list consisting of your message, the shift value, and whether you will be \
+                    println!("Please enter a comma separated list consisting of your message, the seed password, and whether you will be \
                     encrypting or decrypting the message. For example, \"secretmessage,8,enc\"");
     
                     io::stdin().read_line(&mut user_vars).expect("Failed to read user input!");
@@ -378,6 +378,42 @@ async fn main() {
                 }
             }
 
+            // opt if opt.contains("col") => {
+            //     println!("A Columnar-transpositional cipher is a transpositional cipher that involves transposing laying characters out on a table based on a key then shifting the column order to be based alphabetically on the key. The columns are then listed to get the ciphertext. Is this what you would like to do?");
+
+            //     //read input
+            //     io::stdin().read_line(&mut user_choice).expect("Failed to read user input!");
+
+
+            //     let valid_yes_options = ["y"];
+            //     if valid_yes_options.iter().any(|&option| user_choice.trim().to_lowercase().contains(option)) { 
+            //         println!("Please enter a comma separated list consisting of your message, the secret key, and whether you will be \
+            //         encrypting or decrypting the message. For example, \"secretmessage,key,enc\"");
+    
+            //         io::stdin().read_line(&mut user_vars).expect("Failed to read user input!");
+            //         let args: Vec<&str> = user_vars.split(',').collect();
+            //         if let Some(val) = args.get(2) { //make sure there are 3 given values
+            //             let valid_type_options = ["enc","dec"];
+            //             if valid_type_options.iter().any(|&option| val.trim().to_lowercase().contains(option)) { 
+            //                     let result = ciphers::col_trans_cipher(args[0],args[1],val);
+            //                     let result_description = match val { //match input to get a nice output
+            //                         x if x.contains("enc") => "ciphertext",
+            //                         x if x.contains("dec") => "plaintext",
+            //                         _=> "output",
+            //                     };
+            //                     println!("Resulting {} is: \t {}",result_description,result);
+            //             } else {
+            //                 println!("Couldn't locate 'enc' or 'dec' in reply!");
+            //             }
+            //         } else {
+            //             println!("Please enter a proper number of arguments");
+            //         }
+            //     } else {
+            //         println!("Please try selecting a cipher again.");
+            //     }
+            // }
+
+            
             opt if opt.contains("help") => {
                 println!("Enter a valid cipher option. Valid options include the following:\n\n
 caesar cipher: Shift characters by integer shift key,\n
