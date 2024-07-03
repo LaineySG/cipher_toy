@@ -776,79 +776,81 @@ pub fn simplesub_cipher(message: &str,seed: &str,enc_type: &str) -> String {
 }
 
 
-//Work in progress
-// pub fn col_trans_cipher(message: &str,key: &str,enc_type: &str) -> String {
-//     let mut result = String::new();
-//     let mut dict: HashMap<char, Vec<char>> = HashMap::new();
+pub fn col_trans_cipher(message: &str,key: &str,enc_type: &str) -> String {
+    let mut result = String::new();
+    let mut dict: HashMap<char, Vec<char>> = HashMap::new();
     
-//     if enc_type.contains("enc") {
-//         for c in key.chars() {
-//             // Create one column per character
-//             dict.insert(c, Vec::new()); // Set dictionary key with an empty array for now
-//         }
+    if enc_type.contains("enc") {
+        for c in key.chars() {
+            // Create one column per character
+            dict.insert(c, Vec::new()); // Set dictionary key with an empty array for now
+        }
+        let mut message:String = message.to_string();
+        // Now table is made up with the correct columns equal to that of the key chars. Now we fill w/ values.
+        let mut cursor = 0;
+        while message.chars().count() % key.chars().count() != 0 {
+            message += "*"; //add asterisk to fill in the extra spaces
+        }
+        for ch in message.chars() {
+            // For each char in the message:
+            dict.get_mut(&key.chars().nth(cursor).unwrap()).unwrap().push(ch); // Update the message for the key by adding a new vec entry
+            cursor += 1;
+            if cursor >= key.len() {
+                cursor = 0;
+            }
+        }
         
-//         // Now table is made up with the correct columns equal to that of the key chars. Now we fill w/ values.
-//         let mut cursor = 0;
-//         for ch in message.chars() {
-//             // For each char in the message:
-//             dict.get_mut(&key.chars().nth(cursor).unwrap()).unwrap().push(ch); // Update the message for the key by adding a new vec entry
-//             cursor += 1;
-//             if cursor >= key.len() {
-//                 cursor = 0;
-//             }
-//         }
-        
-//         // Here is where we sort the dict keys alphabetically then push that to the result string
-//         let mut keylist: Vec<char> = dict.keys().cloned().collect();
-//         keylist.sort();
+        // Here is where we sort the dict keys alphabetically then push that to the result string
+        let mut keylist: Vec<char> = dict.keys().cloned().collect();
+        keylist.sort();
 
-//         for k in keylist {
-//             if let Some(v) = dict.get(&k) {
-//                 result.push_str(&v.iter().collect::<String>());
-//             }
-//         }
-//     } else { // Decrypt message
-//         let rows = (message.chars().count() + key.chars().count() - 1) / key.chars().count();
-//         for c in key.chars() {
-//             // Create one column per character
-//             dict.insert(c, Vec::new()); // Set dictionary key with an empty array for now
-//         }
+        for k in keylist {
+            if let Some(v) = dict.get(&k) {
+                result.push_str(&v.iter().collect::<String>());
+            }
+        }
+    } else { // Decrypt message
+        let rows = (message.chars().count() + key.chars().count() - 1) / key.chars().count();
+        for c in key.chars() {
+            // Create one column per character
+            dict.insert(c, Vec::new()); // Set dictionary key with an empty array for now
+        }
 
-//         let keylist: Vec<char> = key.chars().collect();
-//         let mut kl_sorted = keylist.clone();
-//         kl_sorted.sort();
+        let keylist: Vec<char> = key.chars().collect();
+        let mut kl_sorted = keylist.clone();
+        kl_sorted.sort();
 
-//         // Fill the dictionary with the message characters
-//         let mut cursor = 0;
-//         let mut char_cursor = 0;
-//         for ch in message.chars() {
-//                 dict.get_mut(&kl_sorted[char_cursor]).unwrap().push(ch);
-//                 if cursor < (rows - 1) {cursor+=1;} else {cursor = 0; char_cursor += 1;}
-//         }
-//         //Now we must sort in the correct (original key's) order again to recover message 
-//         let mut returnedlist: HashMap<char, Vec<char>> = HashMap::new();
-//         for k in key.chars() { //for k in the OG key
-//             for (sorted_k, v) in &dict { //And for sorted k in the alphabetized key
-//                 if &k == sorted_k {
-//                     returnedlist.insert(k, v.clone());
-//                     break;
-//                 }
-//             }
-//         }
-//         //And push it to the results string
-//         for i in 0..rows {
-//             for k in key.chars() {
-//                 if let Some(v) = returnedlist.get(&k) {
-//                     if i < v.len() {
-//                         result.push_str(&v[i].to_string());
-//                     }
-//                 }
-//             }
-//         }
-//     }
-//     let output = format!("'{}'",result.clone());
-//     output
-// }
+        // Fill the dictionary with the message characters
+        let mut cursor = 0;
+        let mut char_cursor = 0;
+        for ch in message.chars() {
+                dict.get_mut(&kl_sorted[char_cursor]).unwrap().push(ch);
+                if cursor < (rows - 1) {cursor+=1;} else {cursor = 0; char_cursor += 1;}
+        }
+        //Now we must sort in the correct (original key's) order again to recover message 
+        let mut returnedlist: HashMap<char, Vec<char>> = HashMap::new();
+        for k in key.chars() { //for k in the OG key
+            for (sorted_k, v) in &dict { //And for sorted k in the alphabetized key
+                if &k == sorted_k {
+                    returnedlist.insert(k, v.clone());
+                    break;
+                }
+            }
+        }
+        //And push it to the results string
+        for i in 0..rows {
+            for k in key.chars() {
+                if let Some(v) = returnedlist.get(&k) {
+                    if i < v.len() {
+                        result.push_str(&v[i].to_string());
+                    }
+                }
+            }
+        }
+    }
+    let output = format!("'{}'",result.clone());
+    output
+}
 
 pub fn autokey_cipher(message: &str, key: &str, enc_type: &str) -> String {
     //encrypt: take key, add ciphertext, that's new key
@@ -916,7 +918,6 @@ pub fn autokey_cipher(message: &str, key: &str, enc_type: &str) -> String {
 }
 
 //Ciphers to add:
-//autokey cipher
 //beaufort cipher
 //porta cipher
 //running key cipher

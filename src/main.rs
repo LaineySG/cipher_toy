@@ -28,7 +28,7 @@ struct MainWindow {
 
 #[derive(Debug, PartialEq)]
 enum SelectedActionEnum {
-    Caesar,Vigenere,Atbash,Affine,Baconian,Polybius,SimpleSub,RailFence,Rot13,Bruteforce, BruteforceVigenere, Score,Unknown,Autokey
+    Caesar,Vigenere,Atbash,Affine,Baconian,Polybius,SimpleSub,RailFence,Rot13,Bruteforce, BruteforceVigenere, Score,Unknown,Autokey,Columnar
 }
 impl fmt::Display for SelectedActionEnum {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
@@ -99,6 +99,7 @@ impl eframe::App for MainWindow {
                     ui.selectable_value(selected_action, SelectedActionEnum::RailFence, "Railfence Cipher");
                     ui.selectable_value(selected_action, SelectedActionEnum::Rot13, "ROT13 Cipher");
                     ui.selectable_value(selected_action, SelectedActionEnum::Autokey, "Autokey Cipher");
+                    ui.selectable_value(selected_action, SelectedActionEnum::Columnar, "Columnar Transpositional Cipher");
                     ui.selectable_value(selected_action, SelectedActionEnum::Bruteforce, "Bruteforce");
                     ui.selectable_value(selected_action, SelectedActionEnum::BruteforceVigenere, "Bruteforce Vigenere");
                     ui.selectable_value(selected_action, SelectedActionEnum::Score, "Score String");
@@ -106,7 +107,7 @@ impl eframe::App for MainWindow {
                 
             ui.separator();
             match selected_action.to_string().to_lowercase() {
-                x if x.contains("simplesub") || (x.contains("vigenere") && !x.contains("bruteforce")) || (x.contains("autokey")) => {
+                x if x.contains("simplesub") || (x.contains("vigenere") && !x.contains("bruteforce")) || x.contains("autokey") || x.contains("column") => {
                     ui.label("Secret Key");
                     ui.text_edit_singleline(key_input);
                     ui.separator();
@@ -289,6 +290,10 @@ async fn run_operations(message_input:String,selected_action:String,secret_key:S
             let result = ciphers::simplesub_cipher(&message_input, &secret_key, &encrypt_or_decrypt);
             result
         },
+        opt if opt.contains("columnar") => {
+            let result = ciphers::col_trans_cipher(&message_input, &secret_key, &encrypt_or_decrypt);
+            result
+        },
         opt if opt.contains("column") => {
             //let result = ciphers::col_trans_cipher();
             String::from("Not added yet")
@@ -339,7 +344,7 @@ fn get_info(selected_action:String) -> String {
         opt if opt.contains("autokey") => {
             String::from("The autokey cipher is polyalphabetic substitution cipher that shifts values according to both the secret key and the plaintext, making the distribution of characters more similar than a vigenere cipher.")
         },
-        opt if opt.contains("column") => {
+        opt if opt.contains("columnar") => {
             String::from("A Columnar-transpositional cipher is a transpositional cipher that involves transposing laying characters out on a table based on a key then shifting the column order to be based alphabetically on the key. The columns are then listed to get the ciphertext.")
         },
         _ => {
