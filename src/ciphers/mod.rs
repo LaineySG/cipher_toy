@@ -495,6 +495,7 @@ pub fn read_lines<P>(filename: P) -> io::Result<io::Lines<io::BufReader<File>>> 
 ///Attempts to brute force any cipher type except vigenere
 pub fn bruteforce(message: &str, enc_type: &str) -> String {
     let mut wordlist: Vec<String> = vec![];
+    let mut output:String = String::new();
     if let Ok(lines) = read_lines("src/data/1000_most_common.txt") {
         // Consumes the iterator, returns an (Optional) String
         for line in lines.flatten() {
@@ -581,6 +582,7 @@ pub fn bruteforce(message: &str, enc_type: &str) -> String {
     let output_file = File::create("bruteForceResults.txt").unwrap();
     for (score, message, type_of_cipher) in results.iter().take(50) { //put the top 50 most likely results in the chat
         println!("({:.2}): {} [{}]\n", score, message.trim(), type_of_cipher.trim());
+        output = format!("{}({:.2}): {} [{}]\n\n",output, score, message.trim(), type_of_cipher.trim());
     }
     for (score, message, type_of_cipher) in results.iter() {  //put the other attempts in the brute force results file
         let line_str = format!("({:.2}): {} [{}]\n", score, message.trim(), type_of_cipher.trim());
@@ -588,13 +590,14 @@ pub fn bruteforce(message: &str, enc_type: &str) -> String {
     }
     
     println!("\nFinished! Total time elapsed: {} seconds", now.elapsed().as_secs());
-    String::new()
+    output
 
 }
 
 //Attempts to brute force a vigenere cipher
-pub async fn bruteforce_vigenere(message: &str,bruteforce_limit:i32) -> io::Result<()> {
+pub async fn bruteforce_vigenere(message: &str,bruteforce_limit:i32) -> io::Result<(String)> {
     println!("Checking vigenere ciphers...");
+    let mut output:String = String::new();
     let now = Instant::now(); //to track time elapsed
     
     //gets list of common passwords to attempt to brute force. Also allows for limiting by bruteforce limit since the file is huge. Converts it to a vector for easy access.
@@ -683,6 +686,7 @@ pub async fn bruteforce_vigenere(message: &str,bruteforce_limit:i32) -> io::Resu
     let output_file = File::create("bruteForceResults.txt").unwrap();
     for (score, message, type_of_cipher) in results.iter().take(50) {
         println!("({:.2}): {} [{}]\n", score, message.trim(), type_of_cipher.trim());
+        output = format!("{}({:.2}): {} [{}]\n\n",output, score, message.trim(), type_of_cipher.trim());
     }
     for (score, message, type_of_cipher) in results.iter().take(5000) { 
         let line_str = format!("({:.2}): {} [{}]\n", score, message.trim(), type_of_cipher.trim());
@@ -691,7 +695,7 @@ pub async fn bruteforce_vigenere(message: &str,bruteforce_limit:i32) -> io::Resu
     
     println!("\nFinished! Total time elapsed: {} seconds. Total passwords checked: {}", now.elapsed().as_secs(),bruteforce_limit);
 
-    Ok(())
+    Ok(output)
 
 }
 
@@ -846,6 +850,70 @@ pub fn simplesub_cipher(message: &str,seed: &str,enc_type: &str) -> String {
 //     output
 // }
 
+pub fn autokey_cipher(message: &str, key: &str, enc_type: &str) -> String {
+    //encrypt: take key, add ciphertext, that's new key
+    //decrypt: take key, decrypt first x letters, then add them to end, repeat until finished.
+    let mut key_string: String = String::new(); //This will store our computed key
+    let mut result:String = String::new();
+    let default:&str = "key";
+
+    if enc_type.contains("enc") {
+        key_string = format!("{}{}",key,message).trim().to_lowercase();  
+
+        //Converts the key to ascii, then slices it into an array of ascii characters (so it's indexed properly)
+        let indexed_key = AsciiStr::from_ascii(&key_string); 
+        let idx_key = match indexed_key {
+            Ok(val) => val,
+            Err(_e) => {
+                AsciiStr::from_ascii(default).unwrap()
+            }
+        };
+
+        let key_ascii_arr = idx_key.as_slice();
+        
+        if key_ascii_arr.len() == 0 {
+            return String::new();
+        }
+
+        for (idx, current_char) in message.chars().enumerate() { //returns index and char for each char in message.          
+            let shift = (key_ascii_arr[idx] as i32) - LOWERCASE_ASCII_OFFSET;
+            result.push(shift_char(current_char, shift));
+        }
+        result
+    } else {        
+
+        let keylength = key.len();
+        let msglength = message.chars().count();
+        let num_of_chunks = msglength / keylength;
+        
+
+        for i in 0..=num_of_chunks { //for each chunk
+            
+            key_string = format!("{}{}",key,result).trim().to_lowercase();  
+            //Converts the key to ascii, then slices it into an array of ascii characters (so it's indexed properly)
+            let indexed_key = AsciiStr::from_ascii(&key_string); 
+            let idx_key = match indexed_key {
+                Ok(val) => val,
+                Err(_e) => {
+                    AsciiStr::from_ascii(default).unwrap()
+                }
+            };
+            let key_ascii_arr = idx_key.as_slice();
+            if key_ascii_arr.len() == 0 {
+                return String::new();
+            }
+            for (idx, current_char) in message.chars().enumerate() { //returns index and char for each char in message.
+                if idx < (keylength + (i * keylength)) && idx >= (i * keylength) { //if between the message cursor and length
+                    if idx < key_ascii_arr.len() {
+                        let shift = (key_ascii_arr[idx] as i32) - LOWERCASE_ASCII_OFFSET;
+                        result.push(shift_char(current_char, -shift));
+                    }
+                }         
+            }
+        }  
+        result
+    }
+}
 
 //Ciphers to add:
 //autokey cipher

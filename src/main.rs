@@ -5,6 +5,7 @@ use futures::executor::block_on;
 use futures::join;
 mod ciphers;
 use eframe::egui;
+use futures::TryFutureExt;
 use itertools::Format;
 use rand_seeder::rand_core::block;
 use tokio::sync::watch;
@@ -27,7 +28,7 @@ struct MainWindow {
 
 #[derive(Debug, PartialEq)]
 enum SelectedActionEnum {
-    Caesar,Vigenere,Atbash,Affine,Baconian,Polybius,SimpleSub,RailFence,Rot13,Bruteforce, BruteforceVigenere, Score,Unknown
+    Caesar,Vigenere,Atbash,Affine,Baconian,Polybius,SimpleSub,RailFence,Rot13,Bruteforce, BruteforceVigenere, Score,Unknown,Autokey
 }
 impl fmt::Display for SelectedActionEnum {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
@@ -97,6 +98,7 @@ impl eframe::App for MainWindow {
                     ui.selectable_value(selected_action, SelectedActionEnum::SimpleSub, "Simple Substitution Cipher");
                     ui.selectable_value(selected_action, SelectedActionEnum::RailFence, "Railfence Cipher");
                     ui.selectable_value(selected_action, SelectedActionEnum::Rot13, "ROT13 Cipher");
+                    ui.selectable_value(selected_action, SelectedActionEnum::Autokey, "Autokey Cipher");
                     ui.selectable_value(selected_action, SelectedActionEnum::Bruteforce, "Bruteforce");
                     ui.selectable_value(selected_action, SelectedActionEnum::BruteforceVigenere, "Bruteforce Vigenere");
                     ui.selectable_value(selected_action, SelectedActionEnum::Score, "Score String");
@@ -104,7 +106,7 @@ impl eframe::App for MainWindow {
                 
             ui.separator();
             match selected_action.to_string().to_lowercase() {
-                x if x.contains("simplesub") || x.contains("vigenere") => {
+                x if x.contains("simplesub") || (x.contains("vigenere") && !x.contains("bruteforce")) || (x.contains("autokey")) => {
                     ui.label("Secret Key");
                     ui.text_edit_singleline(key_input);
                     ui.separator();
@@ -130,29 +132,33 @@ impl eframe::App for MainWindow {
                     ui.separator();
                 }
                 x if x.contains("bruteforce") && !x.contains("vigenere") => {
-                egui::ComboBox::from_label("Cipher type (if known)")
-                .selected_text(format!("{:?}", key_input))
-                .show_ui(ui, |ui| {
-                    ui.selectable_value(key_input, SelectedActionEnum::Unknown.to_string().to_lowercase(), "Unknown Cipher");
-                    ui.selectable_value(key_input, SelectedActionEnum::Caesar.to_string().to_lowercase(), "Caesar Cipher");
-                    ui.selectable_value(key_input, SelectedActionEnum::Vigenere.to_string().to_lowercase(), "Vigenere Cipher");
-                    ui.selectable_value(key_input, SelectedActionEnum::Atbash.to_string().to_lowercase(), "Atbash Cipher");
-                    ui.selectable_value(key_input, SelectedActionEnum::Affine.to_string().to_lowercase(), "Affine Cipher");
-                    ui.selectable_value(key_input, SelectedActionEnum::Baconian.to_string().to_lowercase(), "Baconian Cipher");
-                    ui.selectable_value(key_input, SelectedActionEnum::Polybius.to_string().to_lowercase(), "Polybius Cipher");
-                    ui.selectable_value(key_input, SelectedActionEnum::SimpleSub.to_string().to_lowercase(), "Simple Substitution Cipher");
-                    ui.selectable_value(key_input, SelectedActionEnum::RailFence.to_string().to_lowercase(), "Railfence Cipher");
-                    ui.selectable_value(key_input, SelectedActionEnum::Rot13.to_string().to_lowercase(), "ROT13 Cipher");
-                });
-                ui.label("% of words to check"); //a: i32ui.add(i32)
-                ui.add(
-                    egui::DragValue::new(float_percent).clamp_range(1.0..=100.0)
-                );
+                    if !key_input.contains("unk") && !key_input.contains("cae") && !key_input.contains("vig")
+                    && !key_input.contains("atb") && !key_input.contains("aff") && !key_input.contains("bac")
+                    && !key_input.contains("vig") && !key_input.contains("rot") && !key_input.contains("rail")
+                    && !key_input.contains("pol") && !key_input.contains("sub") {*key_input = "unknown".to_string()}
+
+                    egui::ComboBox::from_label("Cipher type (if known)")
+                    .selected_text(format!("{:?}", key_input))
+                    .show_ui(ui, |ui| {
+                        ui.selectable_value(key_input, SelectedActionEnum::Unknown.to_string().to_lowercase(), "Unknown Cipher");
+                        ui.selectable_value(key_input, SelectedActionEnum::Caesar.to_string().to_lowercase(), "Caesar Cipher");
+                        ui.selectable_value(key_input, SelectedActionEnum::Vigenere.to_string().to_lowercase(), "Vigenere Cipher");
+                        ui.selectable_value(key_input, SelectedActionEnum::Atbash.to_string().to_lowercase(), "Atbash Cipher");
+                        ui.selectable_value(key_input, SelectedActionEnum::Affine.to_string().to_lowercase(), "Affine Cipher");
+                        ui.selectable_value(key_input, SelectedActionEnum::Baconian.to_string().to_lowercase(), "Baconian Cipher");
+                        ui.selectable_value(key_input, SelectedActionEnum::Polybius.to_string().to_lowercase(), "Polybius Cipher");
+                        ui.selectable_value(key_input, SelectedActionEnum::SimpleSub.to_string().to_lowercase(), "Simple Substitution Cipher");
+                        ui.selectable_value(key_input, SelectedActionEnum::RailFence.to_string().to_lowercase(), "Railfence Cipher");
+                        ui.selectable_value(key_input, SelectedActionEnum::Rot13.to_string().to_lowercase(), "ROT13 Cipher");
+                        ui.selectable_value(key_input, SelectedActionEnum::Autokey.to_string().to_lowercase(), "Autokey Cipher");
+                    });
                     ui.separator();
                 }
                 x if x.contains("bruteforce") && x.contains("vigenere") => {
-                    ui.label("Secret Key"); //f64: 0 to 100 slider
-                    ui.text_edit_singleline(key_input);
+                    ui.label("% of words to check"); //a: i32ui.add(i32)
+                    ui.add(
+                        egui::DragValue::new(float_percent).clamp_range(1.0..=100.0)
+                    );
                     ui.separator();
                 }
                 _ => {}
@@ -164,21 +170,29 @@ impl eframe::App for MainWindow {
             ui.separator();
 
             if ui.button("Start").clicked() {
-
+                *result = "Working...".to_string();
                 *result = run_operations(message_input.to_string(), selected_action.to_string(),
                 key_input.to_string(), encrypt_or_decrypt.to_string());
                
             }
-            ui.separator();
             
             let result_description = match encrypt_or_decrypt.to_string().to_lowercase() {
                 x if x.contains("enc") => "ciphertext",
                 x if x.contains("dec") => "plaintext",
                 _=> "output",
             };
-            ui.label(format!("Resulting {} is: \t",result_description));
 
-            ui.label(format!("{result}")).highlight();
+            egui::TopBottomPanel::bottom("bottom_panel")
+            .resizable(false)
+            .min_height(400.0)
+            .default_height(400.0)
+            .show_inside(ui, |ui| { egui::ScrollArea::vertical().show(ui, |ui| {
+                ui.vertical_centered(|ui| {
+                    ui.label(format!("Resulting {} is: \t",result_description));
+                    ui.label(format!("{result}")).highlight();
+                });
+            });
+            });
         });
     }
 }
@@ -211,7 +225,7 @@ async fn run_operations(message_input:String,selected_action:String,secret_key:S
         },
         opt if opt.contains("affine") => {
             let args: Vec<&str> = secret_key.split(',').collect();
-            if let Some(val) = args.get(1) {
+            if let Some(_val) = args.get(1) {
                 if args[0].parse::<i32>().is_ok() && args[1].parse::<i32>().is_ok() {
                     let a = args[0].trim().to_lowercase().parse::<i32>().unwrap(); 
                     let b = args[1].trim().to_lowercase().parse::<i32>().unwrap(); 
@@ -228,13 +242,17 @@ async fn run_operations(message_input:String,selected_action:String,secret_key:S
             result
         },
         opt if opt.contains("railfence") => {
-            if (secret_key.parse::<i32>().is_ok()) {
+            if secret_key.parse::<i32>().is_ok() {
                 let key_int = secret_key.trim().to_lowercase().parse::<i32>().unwrap(); 
                 let result = ciphers::railfence_cipher(&message_input, key_int, &encrypt_or_decrypt);
                 result
             } else {
                 String::from("Error: For the railfence cipher, the secret key must be an integer")
             }
+        },
+        opt if opt.contains("autokey") => {
+            let result = ciphers::autokey_cipher(&message_input, &secret_key, &encrypt_or_decrypt);
+            result
         },
         opt if opt.contains("bruteforce") && !opt.contains("vigenere") => {
             let result = ciphers::bruteforce(&message_input, "unknown");
@@ -251,10 +269,18 @@ async fn run_operations(message_input:String,selected_action:String,secret_key:S
                 result.to_string()
             } else {String::from("Error: Word list directory not found!")}
         },
-        // opt if opt.contains("bruteforce") && opt.contains("vigenere") => {
-        //     let mut bfl = (SECRET_KEY_AS_FLOAT / 100.0 * 14344392.0) as i32; //14344392 is the number of passwords in the bruteforce list
-        //     let result = ciphers::bruteforce_vigenere(&message_input, bfl);
-        // }
+        opt if opt.contains("bruteforce") && opt.contains("vigenere") => {
+            if secret_key.parse::<i32>().is_ok() {
+                let keyasf64 = secret_key.trim().to_lowercase().parse::<i32>().unwrap();
+                let bfl = (keyasf64 as f64 / 100.0 * 14344392.0) as i32; //14344392 is the number of passwords in the bruteforce list
+                let result = ciphers::bruteforce_vigenere(&message_input, bfl).await;
+                if result.is_ok() {
+                    result.unwrap()
+                } else {
+                    String::from("Undefined error.")
+                }
+            } else {return String::from("Error: Could not parse word count percentage as float!")}
+        },
         opt if opt.contains("polybius") => {
             let result = ciphers::polybius_cipher(&message_input, &encrypt_or_decrypt);
             result
@@ -305,10 +331,13 @@ fn get_info(selected_action:String) -> String {
             String::from("This will attempt a bruteforce on a string encoded with vigenere. Note that vigenere will take a long time, and may not be possible given a secure enough key.")
         },
         opt if opt.contains("polybius") => {
-            String::from("A Polybius cipher is a monoalphabetic cipher that shifts values by one row according to a 5x5 alphabetic table.")
+            String::from("A Polybius cipher is a monoalphabetic substitution cipher that shifts values by one row according to a 5x5 alphabetic table.")
         },
         opt if opt.contains("simplesub") => {
             String::from("A simple subsitution cipher is a common monoalphabetic substitution cipher that shifts letters by random values seeded by a given key password.")
+        },
+        opt if opt.contains("autokey") => {
+            String::from("The autokey cipher is polyalphabetic substitution cipher that shifts values according to both the secret key and the plaintext, making the distribution of characters more similar than a vigenere cipher.")
         },
         opt if opt.contains("column") => {
             String::from("A Columnar-transpositional cipher is a transpositional cipher that involves transposing laying characters out on a table based on a key then shifting the column order to be based alphabetically on the key. The columns are then listed to get the ciphertext.")
@@ -318,33 +347,3 @@ fn get_info(selected_action:String) -> String {
         }
     }
 }
-
-
-
-
-
-//             opt if opt.contains("help") => {
-//                 println!("Enter a valid cipher option. Valid options include the following:\n\n
-// caesar cipher: Shift characters by integer shift key,\n
-// vigenere cipher: Shift characters by repeating string key,\n
-// atbash cipher: Reverse characters (a => z, b => y, ...),\n
-// Affine cipher: Performs *a+b on chars to encrypt, /a-b to decrypt,\n
-// Baconian cipher: Encodes text as an integer stream which represents binary,\n
-// Polybius cipher: Encodes text by substituting values according to a table,\n
-// Simple Substitution cipher: Encodes text by substituting values according to a seeded shuffle,\n
-// Railfence cipher: Shuffles the order of the characters using a zig-zag pattern along a # of rails, which act as the key,\n
-// ROT13 cipher: Shift characters by 13 places,\n
-
-// You can also enter bruteforce to bruteforce any cipher other than vigenere and simple-substitution, or bruteforce vigenere to bruteforce a vigenere cipher.\n
-// Note: You don't need to enter the full name, you only have to enter enough of the name to register as uniquely one cipher (ie, cae and vig both will work)\n");
-//             }
-//             opt if opt.contains("exit") => {
-//                 println!("Exiting program!");
-//                 break;
-//             }
-//             _ => {
-//                 println!("No cipher was detected! Please try again.");
-//             }
-//         }
-//     }
-// }
