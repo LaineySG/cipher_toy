@@ -48,7 +48,7 @@ pub fn shift_char(c: char, shift: i32) -> char {
     let wrapped_value = (shifted_value - 48).rem_euclid(79) + 48;
     wrapped_value as u8 as char
 }
- /// Caesar cipher shifts the values of each character in the message by a set amount, the shift key. To decrypt, it simply reverses this (shifting backwards).
+/// Caesar cipher shifts the values of each character in the message by a set amount, the shift key. To decrypt, it simply reverses this (shifting backwards).
 pub fn caesar_cipher(message: &str, shift: i32, enc_type: &str) -> String {
     let mut result = String::new();
     let shift = if enc_type.contains("dec") { -shift } else { shift }; //If we're decrypting, shift should be backwards.
