@@ -1,8 +1,7 @@
 use ascii::AsciiStr;
 use core::cmp::Ordering;
-use std::os::windows::thread;
 use modinverse::modinverse;
-use rand::{thread_rng, Rng};
+use rand::Rng;
 use std::fs::File;
 use std::io::{self, stdout, BufRead};
 use std::collections::HashMap;
@@ -11,12 +10,10 @@ use std::time::Instant;
 use std::io::Write;
 use std::sync::{Arc,Mutex};
 use tokio::*;
-use std::ops::Index;
-use rand_seeder::{Seeder, SipHasher};
+use rand_seeder::Seeder;
 use rand_pcg::Pcg64;
 use rand::seq::SliceRandom;
-use itertools::Itertools;
-
+use std::thread;
 
 const LOWERCASE_ASCII_OFFSET: i32 = 97;
 const UPPERCASE_ASCII_OFFSET: i32 = 65;
@@ -284,7 +281,6 @@ pub fn railfence_cipher(message: &str, rails: i32, enc_type: &str) -> String {
     let message = &message.trim();
     let mut rail_matrix:Vec<Vec<char>> = vec![];
     let mut result = String::new();
-    result.push('\'');
     enum Direction {UP,DOWN}
     let mut current_direction = Direction::DOWN;
 
@@ -313,7 +309,6 @@ pub fn railfence_cipher(message: &str, rails: i32, enc_type: &str) -> String {
                 result += &(rail_matrix[i as usize][j as usize]).to_string() //add to result
             }
         }
-        result.push('\'');
     } else { //decryption 
         let mut rail_matrix = vec![vec![' ';message.chars().count()]; rails as usize];
         let (mut row_cursor, mut column_cursor) = (0,0);
@@ -349,7 +344,7 @@ pub fn railfence_cipher(message: &str, rails: i32, enc_type: &str) -> String {
         }
 
         //finally we can run through the matrix in a zig-zag pattern to reconstruct the original message.
-        let mut message_array: Vec<char> = vec!['\''];
+        let mut message_array: Vec<char> = vec![];
         let (mut row_cursor, mut column_cursor) = (0,0);
         for _i in 0..message.chars().count() {
             if row_cursor == 0 {
@@ -367,7 +362,6 @@ pub fn railfence_cipher(message: &str, rails: i32, enc_type: &str) -> String {
             if matches!(current_direction,Direction::UP) {row_cursor += 1;} else {row_cursor -= 1};
             result = message_array.clone().into_iter().collect();
         }
-        result.push('\'');
     }
     result //return result
 
@@ -491,11 +485,26 @@ pub fn read_lines<P>(filename: P) -> io::Result<io::Lines<io::BufReader<File>>> 
     let file = File::open(filename)?; //open the file and read the lines
     Ok(io::BufReader::new(file).lines())
 }
-
+pub fn updatepercentcompletion(percent:i32,completion_percentage_arcmutex:Arc<Mutex<i32>>,update_type:String) {
+    if update_type.contains("add") {
+        let handle = thread::spawn(move || {
+            let mut num = completion_percentage_arcmutex.lock().unwrap();
+            *num += (percent as f32 / 100.0 * 360.0) as i32;
+        });
+        handle.join().unwrap();
+    } else { //set
+        let handle = thread::spawn(move || {
+            let mut num = completion_percentage_arcmutex.lock().unwrap();
+            *num = (percent as f32 / 100.0 * 360.0) as i32;
+        });
+        handle.join().unwrap();
+    }
+}
 ///Attempts to brute force any cipher type except vigenere
-pub fn bruteforce(message: &str, enc_type: &str) -> String {
+pub fn bruteforce(message: &str, enc_type: &str,completion_percentage_arcmutex:Arc<Mutex<i32>>) -> String {
     let mut wordlist: Vec<String> = vec![];
-    let mut output:String = String::new();
+    let mut output:String = String::new();        
+
     if let Ok(lines) = read_lines("src/data/1000_most_common.txt") {
         // Consumes the iterator, returns an (Optional) String
         for line in lines.flatten() {
@@ -513,6 +522,7 @@ pub fn bruteforce(message: &str, enc_type: &str) -> String {
             results.push((score_string(&current,&wordlist), current, "Caesar".to_string())); //push data as tuple
         }
     }
+    updatepercentcompletion(10,completion_percentage_arcmutex.clone(),"add".to_string());
     if enc_type.contains("unk") || enc_type.contains("atb") {
         println!("Checking atbash cipher...");
         let current: String;
@@ -537,10 +547,14 @@ pub fn bruteforce(message: &str, enc_type: &str) -> String {
         let mut current: String;
         for a in 0..200 {
             match a {
-                50 =>{println!("25%...")},
-                100 =>{println!("50%...")},
-                150 =>{println!("75%...")},
-                185 =>{println!("90%...")},
+                50 =>{println!("25%...");
+                updatepercentcompletion(10,completion_percentage_arcmutex.clone(),"add".to_string());},
+                100 =>{println!("50%...");
+                updatepercentcompletion(10,completion_percentage_arcmutex.clone(),"add".to_string());},
+                150 =>{println!("75%...");
+                updatepercentcompletion(10,completion_percentage_arcmutex.clone(),"add".to_string());},
+                185 =>{println!("90%...");
+                updatepercentcompletion(10,completion_percentage_arcmutex.clone(),"add".to_string());},
                 _ =>{},
             }
             for b in 0..26 {
@@ -549,6 +563,7 @@ pub fn bruteforce(message: &str, enc_type: &str) -> String {
             }
         }
     }
+    
     if enc_type.contains("unk") || enc_type.contains("bac") {
         println!("Checking Baconian cipher...");
         let current: String;
@@ -559,10 +574,14 @@ pub fn bruteforce(message: &str, enc_type: &str) -> String {
         println!("Checking Railfence cipher...");
         for rails in 2..2000 {
             match rails {
-                500 =>{println!("15%...")},
-                1000 =>{println!("30%...")},
-                1500 =>{println!("50%...")},
-                2500 =>{println!("85%...")},
+                500 =>{println!("15%...");
+                updatepercentcompletion(10,completion_percentage_arcmutex.clone(),"add".to_string());},
+                1000 =>{println!("30%...");
+                updatepercentcompletion(10,completion_percentage_arcmutex.clone(),"add".to_string());},
+                1500 =>{println!("50%...");
+                updatepercentcompletion(10,completion_percentage_arcmutex.clone(),"add".to_string());},
+                2500 =>{println!("85%...");
+                updatepercentcompletion(10,completion_percentage_arcmutex.clone(),"add".to_string());},
                 _ =>{},
             }
             let current = railfence_cipher(message,rails,"dec");
@@ -571,6 +590,7 @@ pub fn bruteforce(message: &str, enc_type: &str) -> String {
             results.push((score_string(&rail_msg,&wordlist), current, temp.clone())); //push data as tuple
         }
     }
+    updatepercentcompletion(10,completion_percentage_arcmutex.clone(),"add".to_string());
 
     results.sort_by(|a, b| b.0.partial_cmp(&a.0).unwrap_or(Ordering::Equal)); //Do a comparison to sort and get the best results.
 
@@ -584,6 +604,7 @@ pub fn bruteforce(message: &str, enc_type: &str) -> String {
         println!("({:.2}): {} [{}]\n", score, message.trim(), type_of_cipher.trim());
         output = format!("{}({:.2}): {} [{}]\n\n",output, score, message.trim(), type_of_cipher.trim());
     }
+    updatepercentcompletion(10,completion_percentage_arcmutex.clone(),"add".to_string());
     for (score, message, type_of_cipher) in results.iter() {  //put the other attempts in the brute force results file
         let line_str = format!("({:.2}): {} [{}]\n", score, message.trim(), type_of_cipher.trim());
         write!(&output_file, "{}", line_str).unwrap();
@@ -595,7 +616,7 @@ pub fn bruteforce(message: &str, enc_type: &str) -> String {
 }
 
 //Attempts to brute force a vigenere cipher
-pub async fn bruteforce_vigenere(message: &str,bruteforce_limit:i32) -> io::Result<(String)> {
+pub async fn bruteforce_vigenere(message: &str,bruteforce_limit:i32,completion_percentage_arcmutex:Arc<Mutex<i32>>) -> io::Result<(String)> {
     println!("Checking vigenere ciphers...");
     let mut output:String = String::new();
     let now = Instant::now(); //to track time elapsed
@@ -638,6 +659,7 @@ pub async fn bruteforce_vigenere(message: &str,bruteforce_limit:i32) -> io::Resu
         let chunk = chunk.to_vec();        
         let results = Arc::clone(&results);
         let thread_counter = Arc::clone(&thread_counter);
+        let completion_percentage_clone = Arc::clone(&completion_percentage_arcmutex);
 
         //Spawns tokio tasks to carry out the actual brute forcing
         task::spawn(async move {
@@ -648,6 +670,8 @@ pub async fn bruteforce_vigenere(message: &str,bruteforce_limit:i32) -> io::Resu
             let mut thread_counter = thread_counter.lock().unwrap();
             *thread_counter += 1;
             let pct = *thread_counter as f64 * 100.0 / (bruteforce_limit as f64 / 1000.0);
+            
+            updatepercentcompletion((pct.floor() as i32),completion_percentage_clone, "set".to_string());
             print!("\r{}% done...", pct.floor());
             let _ = stdout().flush();
 
@@ -848,7 +872,7 @@ pub fn col_trans_cipher(message: &str,key: &str,enc_type: &str) -> String {
             }
         }
     }
-    let output = format!("'{}'",result.clone());
+    let output = format!("{}",result.clone());
     output
 }
 

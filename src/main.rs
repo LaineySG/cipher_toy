@@ -1,18 +1,15 @@
-use std::io;
-use std::env;
-use eframe::glow::Context;
-use futures::executor::block_on;
-use futures::join;
 mod ciphers;
 use eframe::egui;
-use futures::TryFutureExt;
-use itertools::Format;
-use rand_seeder::rand_core::block;
-use tokio::sync::watch;
-use tokio::sync::oneshot;
 use core::fmt;
+use std::sync::{Arc, Mutex};
+use tokio::runtime::{self, Runtime};
+use tokio::sync::oneshot;
+use tokio::runtime::Handle;
 
-fn main() -> Result<(),eframe::Error> {
+use std::thread;
+
+#[tokio::main]
+async fn main() -> Result<(),eframe::Error> {
     eframe::run_native("Cipher Toy", eframe::NativeOptions::default(), Box::new(|cc| Box::new(MainWindow::new(cc))))
 }
 struct MainWindow {
@@ -20,10 +17,12 @@ struct MainWindow {
     int_a:i32,
     int_b:i32,
     float_percent:f64,
-    key_input:String,
+    key_input:String,    
+    completion_percentage_arcmutex: Arc<Mutex<i32>>,
+    completion_progress: f32,
     selected_action:SelectedActionEnum,
     encrypt_or_decrypt:EncOrDec, //True will be encrypt
-    result:String
+    result:Arc<Mutex<String>>
 }
 
 #[derive(Debug, PartialEq)]
@@ -53,18 +52,27 @@ impl MainWindow {
             int_a: 1,
             int_b: 1,
             float_percent: 5.0,
-            key_input:String::new(),
+            completion_progress: 0.0,
+            key_input:String::new(),    
+            completion_percentage_arcmutex: Arc::new(Mutex::new(0)),
             selected_action: SelectedActionEnum::Caesar,
             encrypt_or_decrypt: EncOrDec::Encrypt,
-            result: String::new()
+            result: Arc::new(Mutex::new(String::new())),
         }
+    }
+    fn call_run_operations(result: Arc<Mutex<String>>,message_input: String, selected_action: String, key_input: String, encrypt_or_decrypt: String,completion_percentage_arcmutex:Arc<Mutex<i32>>) {
+        let handle = tokio::spawn(async move {
+            let output = run_operations(message_input.to_string(), selected_action.to_string(),key_input.to_string(), encrypt_or_decrypt.to_string(),completion_percentage_arcmutex,result).await;
+
+        });
+        
     }
 }
 
 impl eframe::App for MainWindow {
    fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
         egui::CentralPanel::default().show(ctx, |ui| {
-            let Self {message_input,selected_action,encrypt_or_decrypt,result,key_input,int_a,int_b,float_percent} = self;
+            let Self {message_input,selected_action,mut completion_progress,completion_percentage_arcmutex,encrypt_or_decrypt,result,key_input,int_a,int_b,float_percent} = self;
             
 
         egui::SidePanel::right("right_panel")
@@ -127,7 +135,7 @@ impl eframe::App for MainWindow {
                 x if x.contains("caesar") || x.contains("railfence") => {
                     ui.label("Secret Key"); //a: i32ui.add(i32)
                     ui.add(
-                        egui::DragValue::new(int_a).clamp_range(1..=1000)
+                        egui::DragValue::new(int_a).clamp_range(2..=1000)
                     );
                     *key_input = int_a.to_string();
                     ui.separator();
@@ -143,7 +151,6 @@ impl eframe::App for MainWindow {
                     .show_ui(ui, |ui| {
                         ui.selectable_value(key_input, SelectedActionEnum::Unknown.to_string().to_lowercase(), "Unknown Cipher");
                         ui.selectable_value(key_input, SelectedActionEnum::Caesar.to_string().to_lowercase(), "Caesar Cipher");
-                        ui.selectable_value(key_input, SelectedActionEnum::Vigenere.to_string().to_lowercase(), "Vigenere Cipher");
                         ui.selectable_value(key_input, SelectedActionEnum::Atbash.to_string().to_lowercase(), "Atbash Cipher");
                         ui.selectable_value(key_input, SelectedActionEnum::Affine.to_string().to_lowercase(), "Affine Cipher");
                         ui.selectable_value(key_input, SelectedActionEnum::Baconian.to_string().to_lowercase(), "Baconian Cipher");
@@ -160,22 +167,25 @@ impl eframe::App for MainWindow {
                     ui.add(
                         egui::DragValue::new(float_percent).clamp_range(1.0..=100.0)
                     );
+                    *key_input = float_percent.to_string();
                     ui.separator();
                 }
                 _ => {}
             }
-            ui.horizontal(|ui| {
-                ui.radio_value(encrypt_or_decrypt, EncOrDec::Encrypt, "Encrypt");
-                ui.radio_value(encrypt_or_decrypt, EncOrDec::Decrypt, "Decrypt");
-            });
-            ui.separator();
-
-            if ui.button("Start").clicked() {
-                *result = "Working...".to_string();
-                *result = run_operations(message_input.to_string(), selected_action.to_string(),
-                key_input.to_string(), encrypt_or_decrypt.to_string());
-               
+            if !selected_action.to_string().to_lowercase().contains("bruteforce") && !selected_action.to_string().to_lowercase().contains("score") {
+                ui.horizontal(|ui| {
+                    ui.radio_value(encrypt_or_decrypt, EncOrDec::Encrypt, "Encrypt");
+                    ui.radio_value(encrypt_or_decrypt, EncOrDec::Decrypt, "Decrypt");
+                });
+                ui.separator();
             }
+            ui.vertical_centered(|ui| {
+                if ui.button("Start").clicked() {
+                    *result.clone().lock().unwrap() = "Working...".to_string();
+                    MainWindow::call_run_operations(result.clone(),message_input.to_string(), selected_action.to_string(),
+                    key_input.to_string(), encrypt_or_decrypt.to_string(),completion_percentage_arcmutex.clone());
+                }
+             });
             
             let result_description = match encrypt_or_decrypt.to_string().to_lowercase() {
                 x if x.contains("enc") => "ciphertext",
@@ -189,20 +199,32 @@ impl eframe::App for MainWindow {
             .default_height(400.0)
             .show_inside(ui, |ui| { egui::ScrollArea::vertical().show(ui, |ui| {
                 ui.vertical_centered(|ui| {
+                    let res_string = result.lock().unwrap().clone();
                     ui.label(format!("Resulting {} is: \t",result_description));
-                    ui.label(format!("{result}")).highlight();
+                    ui.label(format!("{res_string}")).highlight();
+                    completion_progress = (completion_percentage_arcmutex.lock().unwrap().clone() as f32);
+                    if completion_progress > 0.0 {
+                        let progress = completion_progress / 360.0;
+                        let progress_bar = egui::ProgressBar::new(progress)
+                            .show_percentage();
+                        ui.add(progress_bar);
+                    }
+                    if completion_progress >= 359.0 {
+                        *completion_percentage_arcmutex.lock().unwrap() = 0;
+                    }
                 });
             });
             });
         });
     }
+
+
 }
 
 ///main operation running logic
-#[tokio::main]
-async fn run_operations(message_input:String,selected_action:String,secret_key:String,mut encrypt_or_decrypt:String) -> String {
+async fn run_operations(message_input:String,selected_action:String,secret_key:String,mut encrypt_or_decrypt:String,completion_percentage_arcmutex:Arc<Mutex<i32>>,result:Arc<Mutex<String>>) -> String {
     encrypt_or_decrypt = encrypt_or_decrypt.to_lowercase();
-    match selected_action.to_lowercase() {
+    let x = match selected_action.to_lowercase() {
         opt if opt.contains("caesar") => {
             if secret_key.trim().to_lowercase().parse::<i32>().is_ok() { 
                 let shift_key = secret_key.trim().to_lowercase().parse::<i32>().unwrap(); //Try to get shift key as integer
@@ -256,7 +278,7 @@ async fn run_operations(message_input:String,selected_action:String,secret_key:S
             result
         },
         opt if opt.contains("bruteforce") && !opt.contains("vigenere") => {
-            let result = ciphers::bruteforce(&message_input, "unknown");
+            let result = ciphers::bruteforce(&message_input, "unknown",completion_percentage_arcmutex);
             result
         },
         opt if opt.contains("score") => {
@@ -271,16 +293,16 @@ async fn run_operations(message_input:String,selected_action:String,secret_key:S
             } else {String::from("Error: Word list directory not found!")}
         },
         opt if opt.contains("bruteforce") && opt.contains("vigenere") => {
-            if secret_key.parse::<i32>().is_ok() {
-                let keyasf64 = secret_key.trim().to_lowercase().parse::<i32>().unwrap();
-                let bfl = (keyasf64 as f64 / 100.0 * 14344392.0) as i32; //14344392 is the number of passwords in the bruteforce list
-                let result = ciphers::bruteforce_vigenere(&message_input, bfl).await;
+            if secret_key.parse::<f64>().is_ok() {
+                let keyasf64 = secret_key.trim().to_lowercase().parse::<f64>().unwrap();
+                let bfl = (keyasf64 / 100.0 * 14344392.0).floor() as i32; //14344392 is the number of passwords in the bruteforce list
+                let result = ciphers::bruteforce_vigenere(&message_input, bfl,completion_percentage_arcmutex).await;
                 if result.is_ok() {
                     result.unwrap()
                 } else {
                     String::from("Undefined error.")
                 }
-            } else {return String::from("Error: Could not parse word count percentage as float!")}
+            } else {String::from("Error: Could not parse word count percentage as float!")}
         },
         opt if opt.contains("polybius") => {
             let result = ciphers::polybius_cipher(&message_input, &encrypt_or_decrypt);
@@ -301,7 +323,14 @@ async fn run_operations(message_input:String,selected_action:String,secret_key:S
         _ => {
             String::from("Nothing selected!")
         }
-    }
+    };
+    let result_clone = Arc::clone(&result);
+    let handle = thread::spawn(move || {
+        let mut res_mod = result_clone.lock().unwrap();
+        *res_mod = x;
+    });
+    handle.join().unwrap();
+    String::new()
 }
 fn get_info(selected_action:String) -> String {
     match selected_action.to_lowercase() {
