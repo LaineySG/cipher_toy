@@ -45,6 +45,7 @@ pub fn shift_char(c: char, shift: i32) -> char {
     let wrapped_value = (shifted_value - 48).rem_euclid(79) + 48;
     wrapped_value as u8 as char
 }
+
 /// Caesar cipher shifts the values of each character in the message by a set amount, the shift key. To decrypt, it simply reverses this (shifting backwards).
 pub fn caesar_cipher(message: &str, shift: i32, enc_type: &str) -> String {
     let mut result = String::new();
@@ -485,6 +486,8 @@ pub fn read_lines<P>(filename: P) -> io::Result<io::Lines<io::BufReader<File>>> 
     let file = File::open(filename)?; //open the file and read the lines
     Ok(io::BufReader::new(file).lines())
 }
+
+///Updates the percent completion mutex; used during brute forces to update the completion percent for the GUI.
 pub fn updatepercentcompletion(percent:i32,completion_percentage_arcmutex:Arc<Mutex<i32>>,update_type:String) {
     if update_type.contains("add") {
         let handle = thread::spawn(move || {
@@ -500,10 +503,46 @@ pub fn updatepercentcompletion(percent:i32,completion_percentage_arcmutex:Arc<Mu
         handle.join().unwrap();
     }
 }
+
+//Updates the results with a new message
+pub fn update_results(results:String, result_arcmutex:Arc<Mutex<String>>) {
+    let handle = thread::spawn(move || {
+        let mut res = result_arcmutex.lock().unwrap();
+        *res = results;
+    });
+    handle.join().unwrap();
+}
+ 
 ///Attempts to brute force any cipher type except vigenere
-pub fn bruteforce(message: &str, enc_type: &str,completion_percentage_arcmutex:Arc<Mutex<i32>>) -> String {
+pub async fn bruteforce(message: &str, enc_type: &str,completion_percentage_arcmutex:Arc<Mutex<i32>>,bruteforce_limit:i32,result_arcmutex:Arc<Mutex<String>>) -> io::Result<String> {
     let mut wordlist: Vec<String> = vec![];
-    let mut output:String = String::new();        
+    let mut output:String = String::new();    
+    let mut vig_percent: i32 = 0;
+    let mut lengthcounter = enc_type.chars().filter(|c| *c == ',').count() as i32; //counter the number of things to check (used for the completion %)     
+    if enc_type.contains("unknown") {lengthcounter -= 1;}
+
+    if enc_type.contains("vigenere") {
+        lengthcounter -= 1;
+        vig_percent = (bruteforce_limit as f32 / 14344392.0 * 100.0 * 5.0) as i32;
+        lengthcounter += vig_percent;
+    } //each 1% of words to check, add 5 to the approx. length 
+    if enc_type.contains("autokey") {
+        lengthcounter -= 1;
+        let ak_percent = (bruteforce_limit as f32 / 14344392.0 * 100.0 * 5.0) as i32;
+        lengthcounter += ak_percent;
+    } //each 1% of words to check, add 5 to the approx. length 
+    if enc_type.contains("columnar") {
+        lengthcounter -= 1;
+        let col_percent = (bruteforce_limit as f32 / 14344392.0 * 100.0 * 5.0) as i32;
+        lengthcounter += col_percent;
+    } //each 1% of words to check, add 5 to the approx. length 
+    if enc_type.contains("simplesub") {
+        lengthcounter -= 1;
+        let simsub_percent = (bruteforce_limit as f32 / 14344392.0 * 100.0 * 5.0) as i32;
+        lengthcounter += simsub_percent;
+    } //each 1% of words to check, add 5 to the approx. length 
+
+    let percent_increment = 1.0 / lengthcounter as f32 * 100.0; // 1 / the # of things to check.
 
     if let Ok(lines) = read_lines("src/data/1000_most_common.txt") {
         // Consumes the iterator, returns an (Optional) String
@@ -514,84 +553,170 @@ pub fn bruteforce(message: &str, enc_type: &str,completion_percentage_arcmutex:A
 
     let mut results: Vec<(f64, String, String)> = vec![]; //unwrap option or set to unknown encryption type
     let now = Instant::now();
-    if enc_type.contains("unk") || enc_type.contains("cae") || enc_type.contains("cea") {
-        println!("Checking caesar ciphers...");
+
+    if enc_type.contains("caesar") {
+        update_results("Checking caesar ciphers...".to_string(), result_arcmutex.clone());
         let mut current: String;
         for i in 0..=80 { //0 to 80 inclusive
             current = caesar_cipher(message, i, "dec");
             results.push((score_string(&current,&wordlist), current, "Caesar".to_string())); //push data as tuple
         }
+        updatepercentcompletion(percent_increment as i32,completion_percentage_arcmutex.clone(),"add".to_string()); //adds to completion tally
     }
-    updatepercentcompletion(10,completion_percentage_arcmutex.clone(),"add".to_string());
-    if enc_type.contains("unk") || enc_type.contains("atb") {
-        println!("Checking atbash cipher...");
+    if enc_type.contains("atbash") {
+        update_results("Checking atbash cipher...".to_string(), result_arcmutex.clone());
         let current: String;
         current = atbash_cipher(message);
         results.push((score_string(&current,&wordlist), current, "Atbash".to_string())); //push data as tuple
+        updatepercentcompletion(percent_increment as i32,completion_percentage_arcmutex.clone(),"add".to_string()); //adds to completion tally
     }
-    if enc_type.contains("unk") || enc_type.contains("rot") || enc_type.contains("13") {
-        println!("Checking ROT13 cipher...");
+    if enc_type.contains("rot13") {
+        update_results("Checking ROT13 cipher...".to_string(), result_arcmutex.clone());
         let current: String;
         current = rot13_cipher(message);
         results.push((score_string(&current,&wordlist), current, "ROT13".to_string())); //push data as tuple
+        updatepercentcompletion(percent_increment as i32,completion_percentage_arcmutex.clone(),"add".to_string()); //adds to completion tally
     }
-    if enc_type.contains("unk") || enc_type.contains("pol") {
-        println!("Checking Polybius cipher...");
+    if enc_type.contains("polybius") {
+        update_results("Checking polybius cipher...".to_string(), result_arcmutex.clone());
         let current: String;
         current = polybius_cipher(message,"dec");
         results.push((score_string(&current,&wordlist), current, "Polybius".to_string())); //push data as tuple
+        updatepercentcompletion(percent_increment as i32,completion_percentage_arcmutex.clone(),"add".to_string()); //adds to completion tally
     }
-    
-    if enc_type.contains("unk") || enc_type.contains("aff"){
-        println!("Checking Affine cipher...");
+    if enc_type.contains("affine"){
+        update_results("Checking affine cipher...".to_string(), result_arcmutex.clone());
         let mut current: String;
         for a in 0..200 {
-            match a {
-                50 =>{println!("25%...");
-                updatepercentcompletion(10,completion_percentage_arcmutex.clone(),"add".to_string());},
-                100 =>{println!("50%...");
-                updatepercentcompletion(10,completion_percentage_arcmutex.clone(),"add".to_string());},
-                150 =>{println!("75%...");
-                updatepercentcompletion(10,completion_percentage_arcmutex.clone(),"add".to_string());},
-                185 =>{println!("90%...");
-                updatepercentcompletion(10,completion_percentage_arcmutex.clone(),"add".to_string());},
-                _ =>{},
-            }
             for b in 0..26 {
                 current = affine_cipher(message,a,b,"dec");
                 results.push((score_string(&current,&wordlist), current, "Affine".to_string())); //push data as tuple
             }
         }
+        updatepercentcompletion(percent_increment as i32,completion_percentage_arcmutex.clone(),"add".to_string());
     }
-    
-    if enc_type.contains("unk") || enc_type.contains("bac") {
-        println!("Checking Baconian cipher...");
+    if enc_type.contains("baconian") {
+        update_results("Checking baconian cipher...".to_string(), result_arcmutex.clone());
         let current: String;
         current = baconian_cipher(message, "dec");
         results.push((score_string(&current,&wordlist), current, "Bacon".to_string())); //push data as tuple
+        updatepercentcompletion(percent_increment as i32,completion_percentage_arcmutex.clone(),"add".to_string()); //adds to completion tally
     }
-    if enc_type.contains("unk") || enc_type.contains("rai"){ 
-        println!("Checking Railfence cipher...");
-        for rails in 2..2000 {
-            match rails {
-                500 =>{println!("15%...");
-                updatepercentcompletion(10,completion_percentage_arcmutex.clone(),"add".to_string());},
-                1000 =>{println!("30%...");
-                updatepercentcompletion(10,completion_percentage_arcmutex.clone(),"add".to_string());},
-                1500 =>{println!("50%...");
-                updatepercentcompletion(10,completion_percentage_arcmutex.clone(),"add".to_string());},
-                2500 =>{println!("85%...");
-                updatepercentcompletion(10,completion_percentage_arcmutex.clone(),"add".to_string());},
-                _ =>{},
-            }
+    if enc_type.contains("railfence"){ 
+        update_results("Checking railfence cipher...".to_string(), result_arcmutex.clone());
+        for rails in 2..3000 {
             let current = railfence_cipher(message,rails,"dec");
             let temp = format!("Railfence[{}]",rails);
             let rail_msg = &current[1..current.len()-1]; //removes apostrophes from rail message before scoring 
             results.push((score_string(&rail_msg,&wordlist), current, temp.clone())); //push data as tuple
         }
+        updatepercentcompletion(percent_increment as i32,completion_percentage_arcmutex.clone(),"add".to_string());
     }
-    updatepercentcompletion(10,completion_percentage_arcmutex.clone(),"add".to_string());
+    if enc_type.contains("autokey") || enc_type.contains("vigenere") || enc_type.contains("simplesub") { //password-cracking brute forces
+         //gets list of common passwords to attempt to brute force. Also allows for limiting by bruteforce limit since the file is huge. Converts it to a vector for easy access.
+        
+        update_results("Loading password bruteforce list...".to_string(), result_arcmutex.clone());
+        async fn get_password_list (bruteforce_limit:i32) -> io::Result<Vec<String>> {
+            let mut password_list: Vec<String> = vec![];
+            if let Ok(lines) = read_lines("src/data/rockyou.txt") {
+                // Consumes the iterator, returns an (Optional) String
+                for line in lines.flatten().take(bruteforce_limit.clone() as usize){ //take only the specified line count
+                    password_list.push(line);
+                }
 
+            } else {println!("Directory not found - passwords!")}
+            Ok(password_list)
+        }
+        
+        let rock_you = match get_password_list(bruteforce_limit).await {
+            Ok(list) => list,
+            Err(e) => {
+                eprintln!("There was an error reading the password list: {:?}", e);
+                return Err(e)
+            }
+        };
+
+
+
+        if enc_type.contains("autokey") {
+            update_results("Checking autokey cipher...".to_string(), result_arcmutex.clone());
+    
+        }
+        if enc_type.contains("vigenere") {
+            update_results("Checking vigenere cipher...".to_string(), result_arcmutex.clone());
+            let thread_counter = Arc::new(Mutex::new(0)); //thread counter, mutex allows us to lock or unlock it for mutually exclusive access
+            //arc allows it to be accessed for concurrent use.
+            let vigenere_pct_arc = Arc::new(Mutex::new(vig_percent as f32 * percent_increment));
+            let result_arcmutex: Arc<Mutex<Vec<(f64, String, String)>>> = Arc::new(Mutex::new(vec![]));
+            //same as above but vector
+        
+            //Creates a list of thread handles, breaks the password list into pieces of length 1000 for easier concurrency.
+            let handles: Vec<_> = rock_you.chunks(1000).enumerate().map(|(_i,chunk)| {
+                
+                // Does some preliminary conversions. Clones the Arc data for safe access.
+                let message = message.to_string();
+                let chunk = chunk.to_vec();        
+                let result_arcmutex_clone = Arc::clone(&result_arcmutex);
+                let vigenere_pct_arc_clone = Arc::clone(&vigenere_pct_arc);
+                let thread_counter = Arc::clone(&thread_counter);
+                let completion_percentage_clone = Arc::clone(&completion_percentage_arcmutex);
+        
+                //Spawns tokio tasks to carry out the actual brute forcing
+                task::spawn(async move {
+        
+                    let mut wordlist: Vec<String> = vec![];
+                    
+                    //Outputs the % finished amount
+                    let mut thread_counter = thread_counter.lock().unwrap();
+                    *thread_counter += 1;
+                    let pct = *thread_counter as f64 * 100.0 / (bruteforce_limit as f64 / 1000.0);
+                    
+                    let vpac_guard = vigenere_pct_arc_clone.lock().unwrap();
+                    let updatechunk = (*vpac_guard / 10.0) as i32;
+                    let currently_done_pct= (100.0 - *vpac_guard as  f32);
+                    let vig_pct = ((pct as f32) * *vpac_guard / 100.0);
+                    let new_total_pct = currently_done_pct + vig_pct;
+                    updatepercentcompletion(new_total_pct as i32, completion_percentage_clone, "set".to_string());
+                
+
+                    //updatepercentcompletion(pct.floor() as i32,completion_percentage_clone, "set".to_string()); //sets % completed for GUI
+                    print!("\r{}% done...", pct.floor());
+                    let _ = stdout().flush();
+        
+                    //Get the 1000 most common words to give to score_string
+                    if let Ok(lines) = read_lines("src/data/1000_most_common.txt") {
+                    for line in lines.flatten() {
+                        wordlist.push(line);
+                    }
+                } else {println!("Directory not found - common words!")}
+        
+                //Lock results so we can access it, similar to counter earlier
+                let mut result_arcmutex_clone_guard = result_arcmutex_clone.lock().unwrap();
+                for j in 0..chunk.len() { //for each part of the chunk we attempt to cipher it then push the data to the results vector
+                    let current = vigenere_cipher(&message,&chunk[j],"dec");
+                    result_arcmutex_clone_guard.push((score_string(&current,&wordlist), current, (format!("Vigenere - {}",&chunk[j])))); //push data as tuple
+                }
+        
+                })
+            }).collect();
+        
+            //joins the handles
+            for handle in handles {
+                handle.await.unwrap();
+            }
+            for (score, message, type_of_cipher) in result_arcmutex.lock().unwrap().iter() { 
+                results.push((*score, message.to_string(), type_of_cipher.to_string())); //push data as tuple
+            }
+        } 
+        if enc_type.contains("simplesub") {
+            update_results("Checking simple substitution cipher...".to_string(), result_arcmutex.clone());
+    
+        }
+    }
+
+
+
+    update_results("Sorting and collecting results...".to_string(), result_arcmutex.clone());
     results.sort_by(|a, b| b.0.partial_cmp(&a.0).unwrap_or(Ordering::Equal)); //Do a comparison to sort and get the best results.
 
     results.dedup_by_key(|k| k.1.clone()); //remove duplicates
@@ -604,121 +729,13 @@ pub fn bruteforce(message: &str, enc_type: &str,completion_percentage_arcmutex:A
         println!("({:.2}): {} [{}]\n", score, message.trim(), type_of_cipher.trim());
         output = format!("{}({:.2}): {} [{}]\n\n",output, score, message.trim(), type_of_cipher.trim());
     }
-    updatepercentcompletion(10,completion_percentage_arcmutex.clone(),"add".to_string());
     for (score, message, type_of_cipher) in results.iter() {  //put the other attempts in the brute force results file
         let line_str = format!("({:.2}): {} [{}]\n", score, message.trim(), type_of_cipher.trim());
         write!(&output_file, "{}", line_str).unwrap();
     }
-    
-    println!("\nFinished! Total time elapsed: {} seconds", now.elapsed().as_secs());
-    output
+    updatepercentcompletion(360, completion_percentage_arcmutex.clone(), "set".to_string());
 
-}
-
-//Attempts to brute force a vigenere cipher
-pub async fn bruteforce_vigenere(message: &str,bruteforce_limit:i32,completion_percentage_arcmutex:Arc<Mutex<i32>>) -> io::Result<(String)> {
-    println!("Checking vigenere ciphers...");
-    let mut output:String = String::new();
-    let now = Instant::now(); //to track time elapsed
-    
-    //gets list of common passwords to attempt to brute force. Also allows for limiting by bruteforce limit since the file is huge. Converts it to a vector for easy access.
-    async fn get_password_list (bruteforce_limit:i32) -> io::Result<Vec<String>> {
-        let mut password_list: Vec<String> = vec![];
-        if let Ok(lines) = read_lines("src/data/rockyou.txt") {
-            // Consumes the iterator, returns an (Optional) String
-            for line in lines.flatten().take(bruteforce_limit.clone() as usize){ //take only the specified line count
-                password_list.push(line);
-            }
-
-        } else {println!("Directory not found - passwords!")}
-        Ok(password_list)
-    }
-    
-    println!("Loading passkey bruteforce list...");
-    let rock_you = match get_password_list(bruteforce_limit).await {
-        Ok(list) => list,
-        Err(e) => {
-            eprintln!("There was an error reading the password list: {:?}", e);
-            return Err(e)
-        }
-    };
-    //
-
-    println!("Starting decryption attempt...");
-
-    let thread_counter = Arc::new(Mutex::new(0)); //thread counter, mutex allows us to lock or unlock it for mutually exclusive access
-    //arc allows it to be accessed for concurrent use.
-    let results: Arc<Mutex<Vec<(f64, String, String)>>> = Arc::new(Mutex::new(vec![]));
-    //same as above but vector
-
-    //Creates a list of thread handles, breaks the password list into pieces of length 1000 for easier concurrency.
-    let handles: Vec<_> = rock_you.chunks(1000).enumerate().map(|(_i,chunk)| {
-        
-        // Does some preliminary conversions. Clones the Arc data for safe access.
-        let message = message.to_string();
-        let chunk = chunk.to_vec();        
-        let results = Arc::clone(&results);
-        let thread_counter = Arc::clone(&thread_counter);
-        let completion_percentage_clone = Arc::clone(&completion_percentage_arcmutex);
-
-        //Spawns tokio tasks to carry out the actual brute forcing
-        task::spawn(async move {
-
-            let mut wordlist: Vec<String> = vec![];
-            
-            //Outputs the % finished amount
-            let mut thread_counter = thread_counter.lock().unwrap();
-            *thread_counter += 1;
-            let pct = *thread_counter as f64 * 100.0 / (bruteforce_limit as f64 / 1000.0);
-            
-            updatepercentcompletion((pct.floor() as i32),completion_percentage_clone, "set".to_string());
-            print!("\r{}% done...", pct.floor());
-            let _ = stdout().flush();
-
-            //Get the 1000 most common words to give to score_string
-            if let Ok(lines) = read_lines("src/data/1000_most_common.txt") {
-            for line in lines.flatten() {
-                wordlist.push(line);
-            }
-        } else {println!("Directory not found - common words!")}
-
-        //Lock results so we can access it, similar to counter earlier
-        let mut results = results.lock().unwrap();
-        for j in 0..chunk.len() { //for each part of the chunk we attempt to cipher it then push the data to the results vector
-            let current = vigenere_cipher(&message,&chunk[j],"dec");
-            results.push((score_string(&current,&wordlist), current, (format!("Vigenere - {}",&chunk[j])))); //push data as tuple
-        }
-
-        })
-    }).collect();
-
-    //joins the handles
-    for handle in handles {
-        handle.await.unwrap();
-    }
-
-    println!("\nSee bruteForceResults.txt for more, or increase the password limit if key was not found.\n");
-
-    //Sort and remove duplicates from results
-    let mut results = results.lock().unwrap();
-    results.sort_by(|a, b| b.0.partial_cmp(&a.0).unwrap_or(Ordering::Equal));
-    results.dedup_by_key(|k| k.1.clone()); //remove duplicates
-
-    println!("Most likely results: ");
-
-    //Create file. Post the top 50 results to the console and the top 5000 to the result file.
-    let output_file = File::create("bruteForceResults.txt").unwrap();
-    for (score, message, type_of_cipher) in results.iter().take(50) {
-        println!("({:.2}): {} [{}]\n", score, message.trim(), type_of_cipher.trim());
-        output = format!("{}({:.2}): {} [{}]\n\n",output, score, message.trim(), type_of_cipher.trim());
-    }
-    for (score, message, type_of_cipher) in results.iter().take(5000) { 
-        let line_str = format!("({:.2}): {} [{}]\n", score, message.trim(), type_of_cipher.trim());
-        write!(&output_file, "{}", line_str).unwrap();
-    }
-    
-    println!("\nFinished! Total time elapsed: {} seconds. Total passwords checked: {}", now.elapsed().as_secs(),bruteforce_limit);
-
+    output = format!("\nFinished! Total time elapsed: {} seconds\n\n", now.elapsed().as_secs()) + &output;
     Ok(output)
 
 }
@@ -769,7 +786,7 @@ pub fn polybius_cipher(message: &str, enc_type: &str) -> String {
     result
 }
 
-//Substitutes based on a random shuffle amount
+///Substitutes based on a random shuffle amount (a seed for randomization)
 pub fn simplesub_cipher(message: &str,seed: &str,enc_type: &str) -> String {
     let mut alphabet: [char;26] = ['a','b','c','d','e','f','g','h','i','j','k','l','m','n','o','p','q','r','s','t','u','v','w','x','y','z'];
     let mut rng: Pcg64 = Seeder::from(seed).make_rng();
@@ -799,7 +816,7 @@ pub fn simplesub_cipher(message: &str,seed: &str,enc_type: &str) -> String {
     result
 }
 
-
+///Columnal transpositional cipher, shifts columns in a table based on the keys to alphabetical order then reads vertically
 pub fn col_trans_cipher(message: &str,key: &str,enc_type: &str) -> String {
     let mut result = String::new();
     let mut dict: HashMap<char, Vec<char>> = HashMap::new();
@@ -876,10 +893,11 @@ pub fn col_trans_cipher(message: &str,key: &str,enc_type: &str) -> String {
     output
 }
 
+///Similar to vigenere but uses the messages itself to cipher following the key.
 pub fn autokey_cipher(message: &str, key: &str, enc_type: &str) -> String {
     //encrypt: take key, add ciphertext, that's new key
     //decrypt: take key, decrypt first x letters, then add them to end, repeat until finished.
-    let mut key_string: String = String::new(); //This will store our computed key
+    let mut key_string; //This will store our computed key
     let mut result:String = String::new();
     let default:&str = "key";
 

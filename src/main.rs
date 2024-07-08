@@ -2,11 +2,8 @@ mod ciphers;
 use eframe::egui;
 use core::fmt;
 use std::sync::{Arc, Mutex};
-use tokio::runtime::{self, Runtime};
-use tokio::sync::oneshot;
-use tokio::runtime::Handle;
-
 use std::thread;
+use std::collections::HashMap;
 
 #[tokio::main]
 async fn main() -> Result<(),eframe::Error> {
@@ -22,12 +19,13 @@ struct MainWindow {
     completion_progress: f32,
     selected_action:SelectedActionEnum,
     encrypt_or_decrypt:EncOrDec, //True will be encrypt
-    result:Arc<Mutex<String>>
+    result:Arc<Mutex<String>>,
+    bruteforce_selections:HashMap<String,bool>,
 }
 
 #[derive(Debug, PartialEq)]
 enum SelectedActionEnum {
-    Caesar,Vigenere,Atbash,Affine,Baconian,Polybius,SimpleSub,RailFence,Rot13,Bruteforce, BruteforceVigenere, Score,Unknown,Autokey,Columnar
+    Caesar,Vigenere,Atbash,Affine,Baconian,Polybius,SimpleSub,RailFence,Rot13,Bruteforce, Score,Unknown,Autokey,Columnar
 }
 impl fmt::Display for SelectedActionEnum {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
@@ -58,11 +56,19 @@ impl MainWindow {
             selected_action: SelectedActionEnum::Caesar,
             encrypt_or_decrypt: EncOrDec::Encrypt,
             result: Arc::new(Mutex::new(String::new())),
+            bruteforce_selections: HashMap::from([
+                ("unknown".to_string(), false),
+                ("caesar".to_string(), false),("simplesub".to_string(), false),
+                ("autokey".to_string(), false),("atbash".to_string(), false),
+                ("affine".to_string(), false),("railfence".to_string(), false),
+                ("baconian".to_string(), false),("polybius".to_string(), false),
+                ("rot13".to_string(), false), ("vigenere".to_string(), false)
+            ]),
         }
     }
-    fn call_run_operations(result: Arc<Mutex<String>>,message_input: String, selected_action: String, key_input: String, encrypt_or_decrypt: String,completion_percentage_arcmutex:Arc<Mutex<i32>>) {
-        let handle = tokio::spawn(async move {
-            let output = run_operations(message_input.to_string(), selected_action.to_string(),key_input.to_string(), encrypt_or_decrypt.to_string(),completion_percentage_arcmutex,result).await;
+    fn call_run_operations(result: Arc<Mutex<String>>,message_input: String, selected_action: String, key_input: String, encrypt_or_decrypt: String,completion_percentage_arcmutex:Arc<Mutex<i32>>,bruteforce_options:HashMap<String,bool>) {
+        let _handle = tokio::spawn(async move {
+            let _output = run_operations(message_input.to_string(), selected_action.to_string(),key_input.to_string(), encrypt_or_decrypt.to_string(),completion_percentage_arcmutex,result,bruteforce_options).await;
 
         });
         
@@ -72,8 +78,10 @@ impl MainWindow {
 impl eframe::App for MainWindow {
    fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
         egui::CentralPanel::default().show(ctx, |ui| {
-            let Self {message_input,selected_action,mut completion_progress,completion_percentage_arcmutex,encrypt_or_decrypt,result,key_input,int_a,int_b,float_percent} = self;
-            
+            let Self {message_input,selected_action,mut completion_progress,completion_percentage_arcmutex,
+                encrypt_or_decrypt,result,key_input,int_a,int_b,float_percent,bruteforce_selections} = self;
+        
+        
 
         egui::SidePanel::right("right_panel")
             .resizable(true)
@@ -109,7 +117,6 @@ impl eframe::App for MainWindow {
                     ui.selectable_value(selected_action, SelectedActionEnum::Autokey, "Autokey Cipher");
                     ui.selectable_value(selected_action, SelectedActionEnum::Columnar, "Columnar Transpositional Cipher");
                     ui.selectable_value(selected_action, SelectedActionEnum::Bruteforce, "Bruteforce");
-                    ui.selectable_value(selected_action, SelectedActionEnum::BruteforceVigenere, "Bruteforce Vigenere");
                     ui.selectable_value(selected_action, SelectedActionEnum::Score, "Score String");
                 });
                 
@@ -140,34 +147,44 @@ impl eframe::App for MainWindow {
                     *key_input = int_a.to_string();
                     ui.separator();
                 }
-                x if x.contains("bruteforce") && !x.contains("vigenere") => {
-                    if !key_input.contains("unk") && !key_input.contains("cae") && !key_input.contains("vig")
-                    && !key_input.contains("atb") && !key_input.contains("aff") && !key_input.contains("bac")
-                    && !key_input.contains("vig") && !key_input.contains("rot") && !key_input.contains("rail")
-                    && !key_input.contains("pol") && !key_input.contains("sub") {*key_input = "unknown".to_string()}
-
-                    egui::ComboBox::from_label("Cipher type (if known)")
-                    .selected_text(format!("{:?}", key_input))
-                    .show_ui(ui, |ui| {
-                        ui.selectable_value(key_input, SelectedActionEnum::Unknown.to_string().to_lowercase(), "Unknown Cipher");
-                        ui.selectable_value(key_input, SelectedActionEnum::Caesar.to_string().to_lowercase(), "Caesar Cipher");
-                        ui.selectable_value(key_input, SelectedActionEnum::Atbash.to_string().to_lowercase(), "Atbash Cipher");
-                        ui.selectable_value(key_input, SelectedActionEnum::Affine.to_string().to_lowercase(), "Affine Cipher");
-                        ui.selectable_value(key_input, SelectedActionEnum::Baconian.to_string().to_lowercase(), "Baconian Cipher");
-                        ui.selectable_value(key_input, SelectedActionEnum::Polybius.to_string().to_lowercase(), "Polybius Cipher");
-                        ui.selectable_value(key_input, SelectedActionEnum::SimpleSub.to_string().to_lowercase(), "Simple Substitution Cipher");
-                        ui.selectable_value(key_input, SelectedActionEnum::RailFence.to_string().to_lowercase(), "Railfence Cipher");
-                        ui.selectable_value(key_input, SelectedActionEnum::Rot13.to_string().to_lowercase(), "ROT13 Cipher");
-                        ui.selectable_value(key_input, SelectedActionEnum::Autokey.to_string().to_lowercase(), "Autokey Cipher");
+                x if x.contains("bruteforce") => {
+                ui.vertical_centered(|ui| {
+                    ui.horizontal(|ui| {
+                        if ui.checkbox(bruteforce_selections.get_mut("unknown").expect("Not found!"), "Check all").changed() {
+                            if *bruteforce_selections.get_mut("unknown").expect("Checkbox not found!") == true {
+                                for (_k,v) in bruteforce_selections.into_iter() {
+                                    *v = true;
+                                }
+                            } else {
+                                for (_k,v) in bruteforce_selections.into_iter() {
+                                    *v = false;
+                                }
+                            }
+                        };
+                        ui.checkbox(bruteforce_selections.get_mut("caesar").expect("Not found!"), "Caesar");
+                        ui.checkbox(bruteforce_selections.get_mut("simplesub").expect("Not found!"), "SimpleSub");
+                        ui.checkbox(bruteforce_selections.get_mut("autokey").expect("Not found!"), "Autokey");
                     });
-                    ui.separator();
-                }
-                x if x.contains("bruteforce") && x.contains("vigenere") => {
+                    ui.horizontal(|ui| {
+                        ui.checkbox(bruteforce_selections.get_mut("atbash").expect("Not found!"), "Atbash");
+                        ui.checkbox(bruteforce_selections.get_mut("affine").expect("Not found!"), "Affine");
+                        ui.checkbox(bruteforce_selections.get_mut("railfence").expect("Not found!"), "Railfence");
+                        ui.checkbox(bruteforce_selections.get_mut("vigenere").expect("Not found!"), "Vigenere");
+                    });
+                    ui.horizontal(|ui| {
+                        ui.checkbox(bruteforce_selections.get_mut("baconian").expect("Not found!"), "Baconian");
+                        ui.checkbox(bruteforce_selections.get_mut("polybius").expect("Not found!"), "Polybius");
+                        ui.checkbox(bruteforce_selections.get_mut("rot13").expect("Not found!"), "ROT13");
+                    });
+                });
+                if *bruteforce_selections.get_mut("vigenere").expect("Not found!") == true {
                     ui.label("% of words to check"); //a: i32ui.add(i32)
-                    ui.add(
+                    ui.add(    
                         egui::DragValue::new(float_percent).clamp_range(1.0..=100.0)
                     );
                     *key_input = float_percent.to_string();
+
+                }
                     ui.separator();
                 }
                 _ => {}
@@ -183,7 +200,7 @@ impl eframe::App for MainWindow {
                 if ui.button("Start").clicked() {
                     *result.clone().lock().unwrap() = "Working...".to_string();
                     MainWindow::call_run_operations(result.clone(),message_input.to_string(), selected_action.to_string(),
-                    key_input.to_string(), encrypt_or_decrypt.to_string(),completion_percentage_arcmutex.clone());
+                    key_input.to_string(), encrypt_or_decrypt.to_string(),completion_percentage_arcmutex.clone(),bruteforce_selections.clone());
                 }
              });
             
@@ -202,12 +219,13 @@ impl eframe::App for MainWindow {
                     let res_string = result.lock().unwrap().clone();
                     ui.label(format!("Resulting {} is: \t",result_description));
                     ui.label(format!("{res_string}")).highlight();
-                    completion_progress = (completion_percentage_arcmutex.lock().unwrap().clone() as f32);
+                    completion_progress = completion_percentage_arcmutex.lock().unwrap().clone() as f32;
                     if completion_progress > 0.0 {
                         let progress = completion_progress / 360.0;
                         let progress_bar = egui::ProgressBar::new(progress)
                             .show_percentage();
-                        ui.add(progress_bar);
+                        ui.add(
+                            progress_bar);
                     }
                     if completion_progress >= 359.0 {
                         *completion_percentage_arcmutex.lock().unwrap() = 0;
@@ -222,7 +240,7 @@ impl eframe::App for MainWindow {
 }
 
 ///main operation running logic
-async fn run_operations(message_input:String,selected_action:String,secret_key:String,mut encrypt_or_decrypt:String,completion_percentage_arcmutex:Arc<Mutex<i32>>,result:Arc<Mutex<String>>) -> String {
+async fn run_operations(message_input:String,selected_action:String,secret_key:String,mut encrypt_or_decrypt:String,completion_percentage_arcmutex:Arc<Mutex<i32>>,result:Arc<Mutex<String>>, bruteforce_options: HashMap<String,bool>) -> String {
     encrypt_or_decrypt = encrypt_or_decrypt.to_lowercase();
     let x = match selected_action.to_lowercase() {
         opt if opt.contains("caesar") => {
@@ -277,10 +295,6 @@ async fn run_operations(message_input:String,selected_action:String,secret_key:S
             let result = ciphers::autokey_cipher(&message_input, &secret_key, &encrypt_or_decrypt);
             result
         },
-        opt if opt.contains("bruteforce") && !opt.contains("vigenere") => {
-            let result = ciphers::bruteforce(&message_input, "unknown",completion_percentage_arcmutex);
-            result
-        },
         opt if opt.contains("score") => {
             let mut word_list: Vec<String> = vec![];
             if let Ok(lines) = ciphers::read_lines("src/data/1000_most_common.txt") {
@@ -292,17 +306,28 @@ async fn run_operations(message_input:String,selected_action:String,secret_key:S
                 result.to_string()
             } else {String::from("Error: Word list directory not found!")}
         },
-        opt if opt.contains("bruteforce") && opt.contains("vigenere") => {
-            if secret_key.parse::<f64>().is_ok() {
-                let keyasf64 = secret_key.trim().to_lowercase().parse::<f64>().unwrap();
-                let bfl = (keyasf64 / 100.0 * 14344392.0).floor() as i32; //14344392 is the number of passwords in the bruteforce list
-                let result = ciphers::bruteforce_vigenere(&message_input, bfl,completion_percentage_arcmutex).await;
-                if result.is_ok() {
-                    result.unwrap()
-                } else {
-                    String::from("Undefined error.")
+        opt if opt.contains("bruteforce") => {
+            let mut bruteforce_options_string = String::new();
+            for (k, v) in bruteforce_options.iter() {
+                if *v == true {
+                    bruteforce_options_string += k;
+                    bruteforce_options_string += ",";
                 }
-            } else {String::from("Error: Could not parse word count percentage as float!")}
+            }
+            let mut bfl = 0;
+            if bruteforce_options_string.contains("vigenere") {
+                if secret_key.parse::<f64>().is_ok() {
+                    let keyasf64 = secret_key.trim().to_lowercase().parse::<f64>().unwrap();
+                    bfl = (keyasf64 / 100.0 * 14344392.0).floor() as i32; //14344392 is the number of passwords in the bruteforce list
+                }
+            }
+            
+            let result = ciphers::bruteforce(&message_input, &bruteforce_options_string,completion_percentage_arcmutex,bfl,result.clone()).await;
+            if result.is_ok() {
+                result.unwrap()
+            } else {
+                String::from("Undefined error.")
+            }
         },
         opt if opt.contains("polybius") => {
             let result = ciphers::polybius_cipher(&message_input, &encrypt_or_decrypt);
@@ -316,10 +341,6 @@ async fn run_operations(message_input:String,selected_action:String,secret_key:S
             let result = ciphers::col_trans_cipher(&message_input, &secret_key, &encrypt_or_decrypt);
             result
         },
-        opt if opt.contains("column") => {
-            //let result = ciphers::col_trans_cipher();
-            String::from("Not added yet")
-        }
         _ => {
             String::from("Nothing selected!")
         }
