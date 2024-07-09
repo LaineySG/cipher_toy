@@ -14,8 +14,6 @@ use rand_seeder::Seeder;
 use rand_pcg::Pcg64;
 use rand::seq::SliceRandom;
 use std::thread;
-//use anyhow::{Ok, Error};
-use anyhow::Error;
 
 const LOWERCASE_ASCII_OFFSET: i32 = 97;
 const UPPERCASE_ASCII_OFFSET: i32 = 65;
@@ -401,7 +399,7 @@ pub async fn bruteforce(message: &str, enc_type: &str,completion_percentage_arcm
                 let mut result_arcmutex_clone_guard = result_arcmutex_clone.lock().unwrap();
                 for j in 0..chunk.len() { //for each part of the chunk we attempt to cipher it then push the data to the results vector
                     let keyed_cipher_guard = keyed_cipher_arcmut_clone.lock().unwrap();
-                    let mut current= String::new();
+                    let current;
                     if *keyed_cipher_guard == "autokey".to_string() {
                         current = autokey_cipher(&message,&chunk[j],"dec");
                         result_arcmutex_clone_guard.push((score_string(&current,&wordlist), current, (format!("Autokey - {}",&chunk[j])))); //push data as tuple
