@@ -1,5 +1,8 @@
+//#![windows_subsystem = "windows"] //hides windows terminal by default since it's not necessary w/ the GUI.
+
 mod ciphers;
 use eframe::egui;
+use egui::Color32;
 use core::fmt;
 use std::sync::{Arc, Mutex};
 use std::thread;
@@ -16,7 +19,7 @@ struct MainWindow {
     float_percent:f64,
     key_input:String,    
     wordlist:bool,
-    completion_percentage_arcmutex: Arc<Mutex<i32>>,
+    completion_percentage_arcmutex: Arc<Mutex<f32>>,
     completion_progress: f32,
     selected_action:SelectedActionEnum,
     encrypt_or_decrypt:EncOrDec, //True will be encrypt
@@ -35,7 +38,7 @@ impl fmt::Display for SelectedActionEnum {
 }
 #[derive(Debug, PartialEq)]
 enum EncOrDec {
-    Encrypt, Decrypt
+    Encrypt, Decrypt, Other
 }
 
 impl fmt::Display for EncOrDec {
@@ -53,7 +56,7 @@ impl MainWindow {
             float_percent: 5.0,
             completion_progress: 0.0,
             key_input:String::new(),    
-            completion_percentage_arcmutex: Arc::new(Mutex::new(0)),
+            completion_percentage_arcmutex: Arc::new(Mutex::new(0.0)),
             selected_action: SelectedActionEnum::Caesar,
             encrypt_or_decrypt: EncOrDec::Encrypt,
             result: Arc::new(Mutex::new(String::new())),
@@ -69,7 +72,7 @@ impl MainWindow {
             ]),
         }
     }
-    fn call_run_operations(result: Arc<Mutex<String>>,message_input: String, selected_action: String, key_input: String, encrypt_or_decrypt: String,completion_percentage_arcmutex:Arc<Mutex<i32>>,bruteforce_options:HashMap<String,bool>,wordlist:bool) {
+    fn call_run_operations(result: Arc<Mutex<String>>,message_input: String, selected_action: String, key_input: String, encrypt_or_decrypt: String,completion_percentage_arcmutex:Arc<Mutex<f32>>,bruteforce_options:HashMap<String,bool>,wordlist:bool) {
         let _handle = tokio::spawn(async move {
             let _output = run_operations(message_input.to_string(), selected_action.to_string(),key_input.to_string(), encrypt_or_decrypt.to_string(),completion_percentage_arcmutex,result,bruteforce_options,wordlist).await;
 
@@ -122,7 +125,6 @@ impl eframe::App for MainWindow {
                     ui.selectable_value(selected_action, SelectedActionEnum::Bruteforce, "Bruteforce");
                     ui.selectable_value(selected_action, SelectedActionEnum::Score, "Score String");
                 });
-                
             ui.separator();
             match selected_action.to_string().to_lowercase() {
                 x if x.contains("simplesub") || (x.contains("vigenere") && !x.contains("bruteforce")) || x.contains("autokey") || x.contains("column") => {
@@ -133,22 +135,47 @@ impl eframe::App for MainWindow {
                 x if x.contains("affine") => {
                     ui.label("Secret Key a"); //a,b : i32
                     ui.add(
-                        egui::DragValue::new(int_a).clamp_range(1..=1000)
+                        egui::Slider::new(int_a,1..=25).step_by(2.0)
                     );
+                    if *int_a == 13 {
+                        ui.colored_label(Color32::RED, "13 is not coprime to 26!");
+                    }
+                    
                     ui.label("Secret Key b"); //a,b : i32
                     ui.add(
-                        egui::DragValue::new(int_b).clamp_range(1..=1000)
+                        egui::DragValue::new(int_b).clamp_range(1..=26)
                     );
                     *key_input = format!("{},{}",int_a.to_string(),int_b.to_string());
                     ui.separator();
                 }
-                x if x.contains("caesar") || x.contains("railfence") => {
+                x if x.contains("railfence") => {
                     ui.label("Secret Key"); //a: i32ui.add(i32)
                     ui.add(
-                        egui::DragValue::new(int_a).clamp_range(2..=1000)
+                        egui::DragValue::new(int_a).clamp_range(2..=message_input.len())
                     );
                     *key_input = int_a.to_string();
                     ui.separator();
+                }
+                x if x.contains("caesar") => {
+                    ui.label("Secret Key"); //a: i32ui.add(i32)
+                    ui.add(
+                        egui::DragValue::new(int_a).clamp_range(1..=80)
+                    );
+                    *key_input = int_a.to_string();
+                    ui.separator();
+                }
+                x if x.contains("score") => {
+                {
+                    ui.label("Wordlist for scoring (longer = better but slower)");
+                    ui.horizontal(|ui| {
+                        ui.checkbox(wordlist,"");
+                    });
+                    if *wordlist {
+                        ui.label("10,000 words");
+                    } else {
+                        ui.label("1000 words");
+                    }
+                }
                 }
                 x if x.contains("bruteforce") => {
                 ui.vertical_centered(|ui| {
@@ -208,12 +235,15 @@ impl eframe::App for MainWindow {
                 }
                 _ => {}
             }
-            if !selected_action.to_string().to_lowercase().contains("bruteforce") && !selected_action.to_string().to_lowercase().contains("score") {
+            if !selected_action.to_string().to_lowercase().contains("bruteforce") && !selected_action.to_string().to_lowercase().contains("score")
+            && !selected_action.to_string().to_lowercase().contains("atbash") && !selected_action.to_string().to_lowercase().contains("rot13") {
                 ui.horizontal(|ui| {
                     ui.radio_value(encrypt_or_decrypt, EncOrDec::Encrypt, "Encrypt");
                     ui.radio_value(encrypt_or_decrypt, EncOrDec::Decrypt, "Decrypt");
                 });
                 ui.separator();
+            } else {
+                *encrypt_or_decrypt = EncOrDec::Other;
             }
             ui.vertical_centered(|ui| {
                 if ui.button("Start").clicked() {
@@ -227,7 +257,7 @@ impl eframe::App for MainWindow {
             let result_description = match encrypt_or_decrypt.to_string().to_lowercase() {
                 x if x.contains("enc") => "ciphertext",
                 x if x.contains("dec") => "plaintext",
-                _=> "output",
+                _=> "output", //Other - for example atbash
             };
 
             egui::TopBottomPanel::bottom("bottom_panel")
@@ -247,8 +277,8 @@ impl eframe::App for MainWindow {
                         ui.add(
                             progress_bar);
                     }
-                    if completion_progress >= 359.0 {
-                        *completion_percentage_arcmutex.lock().unwrap() = 0;
+                    if completion_progress >= 360.0 {
+                        *completion_percentage_arcmutex.lock().unwrap() = 0.0;
                     }
                 });
             });
@@ -260,7 +290,7 @@ impl eframe::App for MainWindow {
 }
 
 ///main operation running logic
-async fn run_operations(message_input:String,selected_action:String,secret_key:String,mut encrypt_or_decrypt:String,completion_percentage_arcmutex:Arc<Mutex<i32>>,result:Arc<Mutex<String>>, bruteforce_options: HashMap<String,bool>,wordlist: bool) -> String {
+async fn run_operations(message_input:String,selected_action:String,secret_key:String,mut encrypt_or_decrypt:String,completion_percentage_arcmutex:Arc<Mutex<f32>>,result:Arc<Mutex<String>>, bruteforce_options: HashMap<String,bool>,wordlist: bool) -> String {
     
     if message_input.len() < 1 {
         return "Message not found!".to_string();
@@ -277,7 +307,7 @@ async fn run_operations(message_input:String,selected_action:String,secret_key:S
                 String::from("Please enter the secret key as a positive integer.")
             }
         },
-        opt if opt.contains("vigenere") && !opt.contains("bruteforce") => {
+        opt if opt.contains("vigenere") => {
             let result = ciphers::vigenere_cipher(&message_input, &secret_key, &encrypt_or_decrypt);
             result
         },
@@ -333,15 +363,29 @@ async fn run_operations(message_input:String,selected_action:String,secret_key:S
             result
         },
         opt if opt.contains("score") => {
-            let mut word_list: Vec<String> = vec![];
-            if let Ok(lines) = ciphers::read_lines("src/data/1000_most_common.txt") {
-                // Consumes the iterator, returns an (Optional) String
-                for line in lines.flatten() {
-                    word_list.push(line);
-                }
-                let result = ciphers::score_string(&message_input, &word_list);
-                result.to_string()
-            } else {String::from("Error: Word list directory not found!")}
+            if wordlist == true { //10000
+                let mut word_list: Vec<String> = vec![];
+                if let Ok(lines) = ciphers::read_lines("src/data/10000_most_common.txt") {
+                    // Consumes the iterator, returns an (Optional) String
+                    for line in lines.flatten() {
+                        word_list.push(line);
+                    }
+                    let result = ciphers::score_string(&message_input, &word_list);
+                    result.to_string()
+                } else {String::from("Error: Word list directory not found!")}
+
+            } else {
+                let mut word_list: Vec<String> = vec![];
+                if let Ok(lines) = ciphers::read_lines("src/data/1000_most_common.txt") {
+                    // Consumes the iterator, returns an (Optional) String
+                    for line in lines.flatten() {
+                        word_list.push(line);
+                    }
+                    let result = ciphers::score_string(&message_input, &word_list);
+                    result.to_string()
+                } else {String::from("Error: Word list directory not found!")}
+
+            }
         },
         opt if opt.contains("bruteforce") => {
             let mut bruteforce_options_string = String::new();
@@ -397,7 +441,7 @@ fn get_info(selected_action:String) -> String {
             String::from("An affine cipher is a monoalphabetic substitution cipher that performs a mathematical operation, *a + b on a character, given the key [a,b]. a must be coprime to 26 (eg 3,5,7,9,11,15...).")
         },
         opt if opt.contains("bacon") => {
-            String::from("A baconian cipher is a monoalphabetic substitution cipher that encodes the message in a sort of binary using 'a's and 'b's, fonts or cases, or in this case, randomized digits where digits 6 and below are 0's and 7 and above are 1's. Each character is stored in 5 bits representing the ASCII.")
+            String::from("A baconian cipher is a monoalphabetic substitution cipher that encodes the message in a sort of binary using 'a's and 'b's, fonts or cases, or in this case, randomized digits where digits 6 and below are 0's and 7 and above are 1's. Each character is stored in 5 bits representing the ASCII.\n\nNote: due to the nature of this cipher, numbers in the secret message will not translate well through the encryption and decryption process.")
         },
         opt if opt.contains("railfence") => {
             String::from("A Railfence cipher is a transposition cipher that shuffles each character according to a number of rails that act as the key.")
@@ -418,7 +462,7 @@ fn get_info(selected_action:String) -> String {
             String::from("The autokey cipher is polyalphabetic substitution cipher that shifts values according to both the secret key and the plaintext, making the distribution of characters more similar than a vigenere cipher.")
         },
         opt if opt.contains("columnar") => {
-            String::from("A Columnar-transpositional cipher is a transpositional cipher that involves transposing laying characters out on a table based on a key then shifting the column order to be based alphabetically on the key. The columns are then listed to get the ciphertext. \n\n Note: A key must have all unique, and alphabetical characters to function correctly.")
+            String::from("A Columnar-transpositional cipher is a transpositional cipher that involves transposing laying characters out on a table based on a key then shifting the column order to be based alphabetically on the key. The columns are then listed to get the ciphertext. \n\nNote: A key must have entirely unique characters to function correctly, as the key is alphabetized.")
         },
         _ => {
             String::from("Nothing selected!")
