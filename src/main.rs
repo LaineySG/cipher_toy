@@ -90,19 +90,19 @@ impl eframe::App for MainWindow {
         
         
 
-        egui::SidePanel::right("right_panel")
-            .resizable(true)
-            .default_width(400.0)
-            .width_range(150.0..=400.0)
-            .show_inside(ui, |ui| {
-                ui.vertical_centered(|ui| {
-                    ui.heading("Info");
+            egui::SidePanel::right("right_panel")
+                .resizable(true)
+                .default_width(400.0)
+                .width_range(150.0..=400.0)
+                .show_inside(ui, |ui| {
+                    ui.vertical_centered(|ui| {
+                        ui.heading("Info");
+                    });
+                    egui::ScrollArea::vertical().show(ui, |ui| {
+                        let infoblock = get_info(selected_action.to_string());
+                        ui.label(format!("{infoblock}"));
+                    });
                 });
-                egui::ScrollArea::vertical().show(ui, |ui| {
-                    let infoblock = get_info(selected_action.to_string());
-                    ui.label(format!("{infoblock}"));
-                });
-            });
             
             ui.heading("Cipher Toy");
             ui.separator();
@@ -166,72 +166,72 @@ impl eframe::App for MainWindow {
                     ui.separator();
                 }
                 x if x.contains("score") => {
-                {
-                    ui.label("Wordlist for scoring (longer = better but slower)");
-                    ui.horizontal(|ui| {
-                        ui.checkbox(wordlist,"");
-                    });
-                    if *wordlist {
-                        ui.label("10,000 words");
-                    } else {
-                        ui.label("1000 words");
+                    {
+                        ui.label("Wordlist for scoring (longer = better but slower)");
+                        ui.horizontal(|ui| {
+                            ui.checkbox(wordlist,"");
+                        });
+                        if *wordlist {
+                            ui.label("10,000 words");
+                        } else {
+                            ui.label("1000 words");
+                        }
                     }
-                }
                 }
                 x if x.contains("bruteforce") => {
-                ui.vertical_centered(|ui| {
-                    ui.horizontal(|ui| {
-                        if ui.checkbox(bruteforce_selections.get_mut("unknown").expect("Not found!"), "Check all").changed() {
-                            if *bruteforce_selections.get_mut("unknown").expect("Checkbox not found!") == true {
-                                for (_k,v) in bruteforce_selections.into_iter() {
-                                    *v = true;
+                    ui.vertical_centered(|ui| {
+                        ui.horizontal(|ui| {
+                            if ui.checkbox(bruteforce_selections.get_mut("unknown").expect("Not found!"), "Check all").changed() {
+                                if *bruteforce_selections.get_mut("unknown").expect("Checkbox not found!") == true {
+                                    for (_k,v) in bruteforce_selections.into_iter() {
+                                        *v = true;
+                                    }
+                                } else {
+                                    for (_k,v) in bruteforce_selections.into_iter() {
+                                        *v = false;
+                                    }
                                 }
-                            } else {
-                                for (_k,v) in bruteforce_selections.into_iter() {
-                                    *v = false;
-                                }
-                            }
-                        };
-                        ui.checkbox(bruteforce_selections.get_mut("caesar").expect("Not found!"), "Caesar");
-                        ui.checkbox(bruteforce_selections.get_mut("simplesub").expect("Not found!"), "*SimpleSub");
-                        ui.checkbox(bruteforce_selections.get_mut("autokey").expect("Not found!"), "*Autokey");
+                            };
+                            ui.checkbox(bruteforce_selections.get_mut("caesar").expect("Not found!"), "Caesar");
+                            ui.checkbox(bruteforce_selections.get_mut("simplesub").expect("Not found!"), "*SimpleSub");
+                            ui.checkbox(bruteforce_selections.get_mut("autokey").expect("Not found!"), "*Autokey");
+                        });
+                        ui.horizontal(|ui| {
+                            ui.checkbox(bruteforce_selections.get_mut("atbash").expect("Not found!"), "Atbash");
+                            ui.checkbox(bruteforce_selections.get_mut("affine").expect("Not found!"), "Affine");
+                            ui.checkbox(bruteforce_selections.get_mut("railfence").expect("Not found!"), "Railfence");
+                            ui.checkbox(bruteforce_selections.get_mut("vigenere").expect("Not found!"), "*Vigenere");
+                        });
+                        ui.horizontal(|ui| {
+                            ui.checkbox(bruteforce_selections.get_mut("baconian").expect("Not found!"), "Baconian");
+                            ui.checkbox(bruteforce_selections.get_mut("polybius").expect("Not found!"), "Polybius");
+                            ui.checkbox(bruteforce_selections.get_mut("rot13").expect("Not found!"), "ROT13");
+                            ui.checkbox(bruteforce_selections.get_mut("columnar").expect("Not found!"), "*Columnar Transposition");
+                        });
                     });
-                    ui.horizontal(|ui| {
-                        ui.checkbox(bruteforce_selections.get_mut("atbash").expect("Not found!"), "Atbash");
-                        ui.checkbox(bruteforce_selections.get_mut("affine").expect("Not found!"), "Affine");
-                        ui.checkbox(bruteforce_selections.get_mut("railfence").expect("Not found!"), "Railfence");
-                        ui.checkbox(bruteforce_selections.get_mut("vigenere").expect("Not found!"), "*Vigenere");
-                    });
-                    ui.horizontal(|ui| {
-                        ui.checkbox(bruteforce_selections.get_mut("baconian").expect("Not found!"), "Baconian");
-                        ui.checkbox(bruteforce_selections.get_mut("polybius").expect("Not found!"), "Polybius");
-                        ui.checkbox(bruteforce_selections.get_mut("rot13").expect("Not found!"), "ROT13");
-                        ui.checkbox(bruteforce_selections.get_mut("columnar").expect("Not found!"), "*Columnar Transposition");
-                    });
-                });
-                if *bruteforce_selections.get_mut("vigenere").expect("Not found!") == true ||
-                *bruteforce_selections.get_mut("autokey").expect("Not found!") == true ||
-                *bruteforce_selections.get_mut("columnar").expect("Not found!") == true ||
-                *bruteforce_selections.get_mut("simplesub").expect("Not found!") == true //these are the keyed-ciphers
-                 {
-                    ui.label("% of words to check");
-                    ui.add(    
-                        egui::DragValue::new(float_percent).clamp_range(1.0..=100.0)
-                    );
-                    *key_input = float_percent.to_string();
+                    if *bruteforce_selections.get_mut("vigenere").expect("Not found!") == true ||
+                    *bruteforce_selections.get_mut("autokey").expect("Not found!") == true ||
+                    *bruteforce_selections.get_mut("columnar").expect("Not found!") == true ||
+                    *bruteforce_selections.get_mut("simplesub").expect("Not found!") == true //these are the keyed-ciphers
+                    {
+                        ui.label("% of words to check");
+                        ui.add(    
+                            egui::DragValue::new(float_percent).clamp_range(1.0..=100.0)
+                        );
+                        *key_input = float_percent.to_string();
 
-                }
-                {
-                    ui.label("Wordlist for scoring (longer = better but slower)");
-                    ui.horizontal(|ui| {
-                        ui.checkbox(wordlist,"");
-                    });
-                    if *wordlist {
-                        ui.label("10,000 words");
-                    } else {
-                        ui.label("1000 words");
                     }
-                }
+                    {
+                        ui.label("Wordlist for scoring (longer = better but slower)");
+                        ui.horizontal(|ui| {
+                            ui.checkbox(wordlist,"");
+                        });
+                        if *wordlist {
+                            ui.label("10,000 words");
+                        } else {
+                            ui.label("1000 words");
+                        }
+                    }
                     ui.separator();
                 }
                 _ => {}
@@ -249,9 +249,11 @@ impl eframe::App for MainWindow {
             ui.vertical_centered(|ui| {
                 if ui.button("Start").clicked() {
                     *result.clone().lock().unwrap() = "Working...".to_string();
+
                     MainWindow::call_run_operations(result.clone(),message_input.to_string(), selected_action.to_string(),
                     key_input.to_string(), encrypt_or_decrypt.to_string(),
                     completion_percentage_arcmutex.clone(),bruteforce_selections.clone(),wordlist.clone());
+
                 }
              });
             
@@ -275,12 +277,10 @@ impl eframe::App for MainWindow {
 
                     if completion_progress > 0.0 {
                         let progress = completion_progress / 360.0;
-                        let progress_bar = egui::ProgressBar::new(progress)
-                            .show_percentage();
-                        ui.add(
-                            progress_bar);
+                        let progress_bar = egui::ProgressBar::new(progress).show_percentage();
+                        ui.add(progress_bar);
                     }
-                    if completion_progress >= 360.0 {
+                    if completion_progress >= 360.0 { //reset
                         *completion_percentage_arcmutex.lock().unwrap() = 0.0;
                     }
                 });
@@ -288,15 +288,13 @@ impl eframe::App for MainWindow {
             });
         });
     }
-
-
 }
 
 ///main operation running logic
 async fn run_operations(message_input:String,selected_action:String,secret_key:String,mut encrypt_or_decrypt:String,completion_percentage_arcmutex:Arc<Mutex<f32>>,result:Arc<Mutex<String>>, bruteforce_options: HashMap<String,bool>,wordlist: bool) -> String {
     
     if message_input.len() < 1 {
-        return "Message not found!".to_string();
+        return "Error: Message not found! Ensure that message is not empty.".to_string();
     }
     
     encrypt_or_decrypt = encrypt_or_decrypt.to_lowercase();
@@ -307,7 +305,7 @@ async fn run_operations(message_input:String,selected_action:String,secret_key:S
                 let result = ciphers::caesar_cipher(&message_input,shift_key,&encrypt_or_decrypt);
                 result
             } else {
-                String::from("Please enter the secret key as a positive integer.")
+                String::from("Error: Ensure that the shift key is a valid integer.")
             }
         },
         opt if opt.contains("vigenere") => {
@@ -331,10 +329,10 @@ async fn run_operations(message_input:String,selected_action:String,secret_key:S
                     let result = ciphers::affine_cipher(&message_input,a,b,&encrypt_or_decrypt);
                     result
                 } else {
-                    let result = String::from("Error: For the affine cipher, enter the secret key as a comma separated list: a,b");
+                    let result = String::from("Error: Key for the affine cipher could not be parsed. Ensure that 'a' and 'b' are both integers.");
                     result
                 }
-            } else {String::from("Error: For the affine cipher, enter the secret key as a comma separated list: a,b")}
+            } else {String::from("Error: key for Affine cipher could not be parsed. Ensure that 'a' and 'b' are both selected, valid integers.")}
         },
         opt if opt.contains("bacon") => {
             let result = ciphers::baconian_cipher(&message_input, &encrypt_or_decrypt);
@@ -346,7 +344,7 @@ async fn run_operations(message_input:String,selected_action:String,secret_key:S
                 let result = ciphers::railfence_cipher(&message_input, key_int, &encrypt_or_decrypt);
                 result
             } else {
-                String::from("Error: For the railfence cipher, the secret key must be an integer")
+                String::from("Error: For the railfence cipher, the secret key must be an integer!")
             }
         },
         opt if opt.contains("autokey") => {
@@ -375,7 +373,7 @@ async fn run_operations(message_input:String,selected_action:String,secret_key:S
                     }
                     let result: f64 = utils::score_string(&message_input, &word_list);
                     result.to_string()
-                } else {String::from("Error: Word list directory not found!")}
+                } else {String::from("Error: Word list directory not found! Ensure that 10000_most_common.txt can be found in the src/data folder.")}
 
             } else {
                 let mut word_list: Vec<String> = vec![];
@@ -386,7 +384,7 @@ async fn run_operations(message_input:String,selected_action:String,secret_key:S
                     }
                     let result = utils::score_string(&message_input, &word_list);
                     result.to_string()
-                } else {String::from("Error: Word list directory not found!")}
+                } else {String::from("Error: Word list directory not found! Ensure that 1000_most_common.txt can be found in the src/data folder.")}
 
             }
         },
@@ -411,11 +409,11 @@ async fn run_operations(message_input:String,selected_action:String,secret_key:S
             if result.is_ok() {
                 result.unwrap()
             } else {
-                String::from("Undefined error.")
+                String::from("Error: bruteforce could not be completed.")
             }
         },
         _ => {
-            String::from("Nothing selected!")
+            String::from("Error: No action was selected!")
         }
     };
     let result_clone = Arc::clone(&result);
@@ -426,6 +424,7 @@ async fn run_operations(message_input:String,selected_action:String,secret_key:S
     handle.join().unwrap();
     String::new()
 }
+
 fn get_info(selected_action:String) -> String {
     match selected_action.to_lowercase() {
         opt if opt.contains("caesar") => {
@@ -468,7 +467,7 @@ fn get_info(selected_action:String) -> String {
             String::from("A Columnar-transpositional cipher is a transpositional cipher that involves transposing laying characters out on a table based on a key then shifting the column order to be based alphabetically on the key. The columns are then listed to get the ciphertext. \n\nNote: A key must have entirely unique characters to function correctly, as the key is alphabetized.")
         },
         _ => {
-            String::from("Nothing selected!")
+            String::from("Error: Nothing was selected to retrieve information about!")
         }
     }
 }

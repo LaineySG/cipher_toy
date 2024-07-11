@@ -106,7 +106,10 @@ pub fn score_string(message: &str, word_list: &Vec<String>) -> f64 {
         };
         previous_char = c; //track previous char
     }
-
+    if new_word_counter == 0 {
+        new_word_counter = 1;
+    }
+    
     wordlengths.push(wordlength); //add last word's length to counter after finishing the string
 
     for i in 0..wordlengths.len() {
@@ -124,7 +127,7 @@ pub fn score_string(message: &str, word_list: &Vec<String>) -> f64 {
 
     //Calculates first and last char based on the 'perfect score' for a word starting with and ending with the most common chars (t and e)
     let first_last_probability_score = (last_letter_likelihood + first_letter_likelihood) / 0.3511;
-    likelihood_of_english_score += 0.15 * (first_last_probability_score / (new_word_counter as f64 - 1.0)); //divide by the perfect score to get a ratio.
+    likelihood_of_english_score += 0.15 * (first_last_probability_score / (new_word_counter as f64)); //divide by the perfect score to get a ratio.
     
     //for each alphabetical letter we now get the individual character counts adjusted for the total char count (this is the frequency)
     for i in 0..result_counts.len() {
