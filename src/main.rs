@@ -1,6 +1,7 @@
 #![windows_subsystem = "windows"] //hides windows terminal by default since it's not necessary w/ the GUI.
 
 mod ciphers;
+mod utils;
 use eframe::egui;
 use egui::Color32;
 use core::fmt;
@@ -367,23 +368,23 @@ async fn run_operations(message_input:String,selected_action:String,secret_key:S
         opt if opt.contains("score") => {
             if wordlist == true { //10000
                 let mut word_list: Vec<String> = vec![];
-                if let Ok(lines) = ciphers::read_lines("src/data/10000_most_common.txt") {
+                if let Ok(lines) = utils::read_lines("src/data/10000_most_common.txt") {
                     // Consumes the iterator, returns an (Optional) String
                     for line in lines.flatten() {
                         word_list.push(line);
                     }
-                    let result = ciphers::score_string(&message_input, &word_list);
+                    let result: f64 = utils::score_string(&message_input, &word_list);
                     result.to_string()
                 } else {String::from("Error: Word list directory not found!")}
 
             } else {
                 let mut word_list: Vec<String> = vec![];
-                if let Ok(lines) = ciphers::read_lines("src/data/1000_most_common.txt") {
+                if let Ok(lines) = utils::read_lines("src/data/1000_most_common.txt") {
                     // Consumes the iterator, returns an (Optional) String
                     for line in lines.flatten() {
                         word_list.push(line);
                     }
-                    let result = ciphers::score_string(&message_input, &word_list);
+                    let result = utils::score_string(&message_input, &word_list);
                     result.to_string()
                 } else {String::from("Error: Word list directory not found!")}
 
@@ -406,7 +407,7 @@ async fn run_operations(message_input:String,selected_action:String,secret_key:S
                 }
             }
             
-            let result = ciphers::bruteforce(&message_input, &bruteforce_options_string,completion_percentage_arcmutex,bfl,result.clone(),wordlist).await;
+            let result = utils::bruteforce(&message_input, &bruteforce_options_string,completion_percentage_arcmutex,bfl,result.clone(),wordlist).await;
             if result.is_ok() {
                 result.unwrap()
             } else {
