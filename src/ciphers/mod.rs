@@ -446,7 +446,7 @@ pub fn col_trans_cipher(message: &str,mut key: &str,enc_type: &str) -> String {
         }
     } else { // Decrypt message
         if key.chars().count() == 0 {
-            eprintln!("ERROR: Key len of 0, key: {}",key);
+            eprintln!("ERROR: Key len of 0, using default key: 'key' instead.");
             key = "key";
         }
         let rows = (message.chars().count() + key.chars().count() - 1) / key.chars().count();
@@ -508,6 +508,7 @@ pub fn autokey_cipher(message: &str, key: &str, enc_type: &str) -> String {
         let idx_key = match indexed_key {
             Ok(val) => val,
             Err(_e) => {
+                eprintln!("ERROR: Key len of 0, using default key: 'key' instead.");
                 AsciiStr::from_ascii(default).unwrap()
             }
         };

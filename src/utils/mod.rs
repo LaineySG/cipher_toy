@@ -156,7 +156,7 @@ pub fn read_lines<P>(filename: P) -> io::Result<io::Lines<io::BufReader<File>>> 
 }
 
 ///Updates the percent completion mutex; used during brute forces to update the completion percent for the GUI.
-pub fn updatepercentcompletion(percent:f32,completion_percentage_arcmutex:Arc<Mutex<f32>>,update_type:String) {
+pub fn update_percent_completion(percent:f32,completion_percentage_arcmutex:Arc<Mutex<f32>>,update_type:String) {
     if update_type.contains("add") {
             let handle = thread::spawn(move || {
                 let mut num = completion_percentage_arcmutex.lock().unwrap();
@@ -221,7 +221,9 @@ pub async fn bruteforce(message: &str, enc_type: &str,completion_percentage_arcm
         for line in lines.flatten() {
             wordlist.push(line);
         }
-    } else {println!("Directory not found!")}
+    } else {
+        return Ok(format!("Error: Directory for wordlist not found. Please ensure that {} exists.",wordlist_path))
+    }
 
     let mut results: Vec<(f64, String, String)> = vec![]; //unwrap option or set to unknown encryption type
     let now = Instant::now();
@@ -233,28 +235,28 @@ pub async fn bruteforce(message: &str, enc_type: &str,completion_percentage_arcm
             current = ciphers::caesar_cipher(message, i, "dec");
             results.push((score_string(&current,&wordlist), current, "Caesar".to_string())); //push data as tuple
         }
-        updatepercentcompletion(percent_increment,completion_percentage_arcmutex.clone(),"add".to_string()); //adds to completion tally
+        update_percent_completion(percent_increment,completion_percentage_arcmutex.clone(),"add".to_string()); //adds to completion tally
     }
     if enc_type.contains("atbash") {
         update_results("Checking atbash cipher...".to_string(), result_arcmutex.clone());
         let current: String;
         current = ciphers::atbash_cipher(message);
         results.push((score_string(&current,&wordlist), current, "Atbash".to_string())); //push data as tuple
-        updatepercentcompletion(percent_increment,completion_percentage_arcmutex.clone(),"add".to_string()); //adds to completion tally
+        update_percent_completion(percent_increment,completion_percentage_arcmutex.clone(),"add".to_string()); //adds to completion tally
     }
     if enc_type.contains("rot13") {
         update_results("Checking ROT13 cipher...".to_string(), result_arcmutex.clone());
         let current: String;
         current = ciphers::rot13_cipher(message);
         results.push((score_string(&current,&wordlist), current, "ROT13".to_string())); //push data as tuple
-        updatepercentcompletion(percent_increment,completion_percentage_arcmutex.clone(),"add".to_string()); //adds to completion tally
+        update_percent_completion(percent_increment,completion_percentage_arcmutex.clone(),"add".to_string()); //adds to completion tally
     }
     if enc_type.contains("polybius") {
         update_results("Checking polybius cipher...".to_string(), result_arcmutex.clone());
         let current: String;
         current = ciphers::polybius_cipher(message,"dec");
         results.push((score_string(&current,&wordlist), current, "Polybius".to_string())); //push data as tuple
-        updatepercentcompletion(percent_increment,completion_percentage_arcmutex.clone(),"add".to_string()); //adds to completion tally
+        update_percent_completion(percent_increment,completion_percentage_arcmutex.clone(),"add".to_string()); //adds to completion tally
     }
     if enc_type.contains("affine"){
         update_results("Checking affine cipher...".to_string(), result_arcmutex.clone());
@@ -265,14 +267,14 @@ pub async fn bruteforce(message: &str, enc_type: &str,completion_percentage_arcm
                 results.push((score_string(&current,&wordlist), current, "Affine".to_string())); //push data as tuple
             }
         }
-        updatepercentcompletion(percent_increment,completion_percentage_arcmutex.clone(),"add".to_string());
+        update_percent_completion(percent_increment,completion_percentage_arcmutex.clone(),"add".to_string());
     }
     if enc_type.contains("baconian") {
         update_results("Checking baconian cipher...".to_string(), result_arcmutex.clone());
         let current: String;
         current = ciphers::baconian_cipher(message, "dec");
         results.push((score_string(&current,&wordlist), current, "Bacon".to_string())); //push data as tuple
-        updatepercentcompletion(percent_increment,completion_percentage_arcmutex.clone(),"add".to_string()); //adds to completion tally
+        update_percent_completion(percent_increment,completion_percentage_arcmutex.clone(),"add".to_string()); //adds to completion tally
     }
     if enc_type.contains("railfence"){ 
         update_results("Checking railfence cipher...".to_string(), result_arcmutex.clone());
@@ -282,12 +284,13 @@ pub async fn bruteforce(message: &str, enc_type: &str,completion_percentage_arcm
             let rail_msg = &current[1..current.len()-1]; //removes apostrophes from rail message before scoring 
             results.push((score_string(&rail_msg,&wordlist), current, temp.clone())); //push data as tuple
         }
-        updatepercentcompletion(percent_increment,completion_percentage_arcmutex.clone(),"add".to_string());
+        update_percent_completion(percent_increment,completion_percentage_arcmutex.clone(),"add".to_string());
     }
     if enc_type.contains("autokey") || enc_type.contains("vigenere") || enc_type.contains("simplesub") || enc_type.contains("columnar") { //password-cracking brute forces
          //gets list of common passwords to attempt to brute force. Also allows for limiting by bruteforce limit since the file is huge. Converts it to a vector for easy access.
         
         update_results("Loading password bruteforce list...".to_string(), result_arcmutex.clone());
+
         async fn get_password_list (bruteforce_limit:i32) -> io::Result<Vec<String>> {
             let mut password_list: Vec<String> = vec![];
             if let Ok(lines) = read_lines("src/data/rockyou.txt") {
@@ -296,15 +299,14 @@ pub async fn bruteforce(message: &str, enc_type: &str,completion_percentage_arcm
                     password_list.push(line);
                 }
 
-            } else {println!("Directory not found - passwords!")}
+            }
             Ok(password_list)
         }
         
         let rock_you = match get_password_list(bruteforce_limit).await {
             Ok(list) => list,
-            Err(e) => {
-                eprintln!("There was an error reading the password list: {:?}", e);
-                return Err(e)
+            Err(_e) => {
+                return Ok("Error: rockyou.txt could not be located. Please ensure that 'src/data/rockyou.txt' exists.".to_string());
             }
         };
 
@@ -366,7 +368,7 @@ pub async fn bruteforce(message: &str, enc_type: &str,completion_percentage_arcm
 
                     if percent_threads.floor() % 4.0 <= 1.0 { //every 4%, update the progress bar with 1/25th of the total percentage allotted to the keyed cipher.
                         if !*progress_bar_lock_guard {
-                            updatepercentcompletion(*mutex_guard / 25.0, completion_percentage_clone, "add".to_string());
+                            update_percent_completion(*mutex_guard / 25.0, completion_percentage_clone, "add".to_string());
                             *progress_bar_lock_guard = true;
                         }
                     } else {
@@ -382,7 +384,9 @@ pub async fn bruteforce(message: &str, enc_type: &str,completion_percentage_arcm
                     for line in lines.flatten() {
                         wordlist.push(line);
                     }
-                    } else {println!("Directory not found - common words!")}
+                    } else {
+                        eprintln!("Error: Common words file could not be located. Ensure that {} exists.", wordlist_path);
+                    }
         
                     //Results to be gathered later
                     let mut result_arcmut_clone_guard = result_arcmut_clone.lock().unwrap();
@@ -441,16 +445,21 @@ pub async fn bruteforce(message: &str, enc_type: &str,completion_percentage_arcm
     println!("Most likely results: ");
     println!("\n"); //higher numbers are more different from english and thus less likely to be the plaintext result.
 
-    let output_file = File::create("bruteForceResults.txt").unwrap();
+    let output_file = File::create("bruteForceResults.txt");
+    let file = match output_file { 
+        Ok(file) => file,
+        Err(_e) => return Err(_e)
+    };
+    
     for (score, message, type_of_cipher) in results.iter().take(50) { //put the top 50 most likely results in the chat
         println!("({:.2}): {} [{}]\n", score, message.trim(), type_of_cipher.trim());
         output = format!("{}({:.2}): {} [{}]\n\n",output, score, message.trim(), type_of_cipher.trim());
     }
     for (score, message, type_of_cipher) in results.iter() {  //put the other attempts in the brute force results file
         let line_str = format!("({:.2}): {} [{}]\n", score, message.trim(), type_of_cipher.trim());
-        write!(&output_file, "{}", line_str).unwrap();
+        write!(&file, "{}", line_str).unwrap();
     }
-    updatepercentcompletion(100.0, completion_percentage_arcmutex.clone(), "set".to_string());
+    update_percent_completion(100.0, completion_percentage_arcmutex.clone(), "set".to_string());
 
     output = format!("\nFinished! Total time elapsed: {} seconds\n\n", now.elapsed().as_secs()) + &output;
     Ok(output)
