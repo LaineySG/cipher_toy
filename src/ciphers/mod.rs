@@ -332,21 +332,28 @@ pub async fn bruteforce(message: &str, enc_type: &str,completion_percentage_arcm
 
             let thread_counter = Arc::new(Mutex::new(0)); //thread counter, mutex allows us to lock or unlock it for mutually exclusive access
             
-            let keyed_cipher_arcmut = Arc::new(Mutex::new(keyed_cipher));
+            let keyed_cipher_arcmut = Arc::new(Mutex::new(keyed_cipher)); //cipher name stored for use during output.
             //arc allows it to be accessed for concurrent use.
+
             let keyedcipher_pct_arc = Arc::new(Mutex::new(keyedcipher_len as f32 * percent_increment));
-            let keycipher_result_arcmutex: Arc<Mutex<Vec<(f64, String, String)>>> = Arc::new(Mutex::new(vec![]));
-            //same as above but vector
+            //Amount that the keyed cipher in question needs to fill
+
+            let keycipher_result_arcmut: Arc<Mutex<Vec<(f64, String, String)>>> = Arc::new(Mutex::new(vec![]));
+            //stores the results of the keyed cipher
         
-            let mut tracker = Arc::new(Mutex::new(false));
-            //Creates a list of thread handles, breaks the password list into pieces of length 1000 for easier concurrency.
+            let progress_bar_lock = Arc::new(Mutex::new(false)); 
+            //Used to lock the progress bar from updating if it has already been updated for a given percent (ie, 10.10 and 10.90 both floor() to 10 but we only want to update once at 10%.)
+
             let handles: Vec<_> = rock_you.chunks(1000).enumerate().map(|(_i,chunk)| {
+                //Creates a list of thread handles, breaks the password list into pieces of length 1000 for easier concurrency.
                 
                 // Does some preliminary conversions. Clones the Arc data for safe access.
                 let message = message.to_string();
-                let chunk = chunk.to_vec();     
-                let tracker_arcmutex_clone = Arc::clone(&tracker);
-                let result_arcmutex_clone = Arc::clone(&keycipher_result_arcmutex);
+                let chunk = chunk.to_vec(); //chunk of passwords to check
+
+                //Arc::clones all the values from before so they can be safely used in the tasks
+                let progress_bar_lock_arcmut_clone = Arc::clone(&progress_bar_lock);
+                let result_arcmut_clone = Arc::clone(&keycipher_result_arcmut);
                 let keyedcipher_pct_arc_clone = Arc::clone(&keyedcipher_pct_arc);
                 let thread_counter = Arc::clone(&thread_counter);
                 let completion_percentage_clone = Arc::clone(&completion_percentage_arcmutex);
@@ -360,68 +367,74 @@ pub async fn bruteforce(message: &str, enc_type: &str,completion_percentage_arcm
                     //Outputs the % finished amount
                     let mut thread_counter = thread_counter.lock().unwrap();
                     *thread_counter += 1;
-                    let pct = *thread_counter as f64 * 100.0 / (bruteforce_limit as f64 / 1000.0);
+
+                    //pct tracks the percent based on the thread number. bruteforcelimit / 1000 is the chunk size. Multiplies by 100 to get as %.
+                    let percent_threads = *thread_counter as f64 * 100.0 / (bruteforce_limit as f64 / 1000.0);
                     
-                    let mutex_guard = keyedcipher_pct_arc_clone.lock().unwrap();
-                    let currently_done_pct= 100.0 - *mutex_guard as  f32;
-                    let fraction_percent = (pct as f32) * *mutex_guard / 100.0;
-                    let new_total_pct = currently_done_pct + fraction_percent;
-                    //updatepercentcompletion(new_total_pct as i32, completion_percentage_clone, "set".to_string());
-                    let mut tracker = tracker_arcmutex_clone.lock().unwrap();
-                    if pct.floor() % 4.0 <= 1.0 {
-                        if !*tracker {
+                    let mutex_guard = keyedcipher_pct_arc_clone.lock().unwrap();  //This is the % that the keyed cipher in question has to fill
+                    let mut progress_bar_lock_guard = progress_bar_lock_arcmut_clone.lock().unwrap();
+
+                    if percent_threads.floor() % 4.0 <= 1.0 { //every 4%, update the progress bar with 1/25th of the total percentage allotted to the keyed cipher.
+                        if !*progress_bar_lock_guard {
                             updatepercentcompletion(*mutex_guard / 25.0, completion_percentage_clone, "add".to_string());
-                            *tracker = true;
+                            *progress_bar_lock_guard = true;
                         }
                     } else {
-                        *tracker = false;
+                        *progress_bar_lock_guard = false; 
                     }
                     
 
-                    print!("\r{}% done...", pct.floor());
+                    print!("\r{}% done...", percent_threads.floor());
                     let _ = stdout().flush();
         
-                    //Get the 1000 most common words to give to score_string
+                    //Get the 1000 or 10000 most common words to give to score_string
                     if let Ok(lines) = read_lines(wordlist_path) {
                     for line in lines.flatten() {
                         wordlist.push(line);
                     }
-                } else {println!("Directory not found - common words!")}
+                    } else {println!("Directory not found - common words!")}
         
-                //Lock results so we can access it, similar to counter earlier
-                let mut result_arcmutex_clone_guard = result_arcmutex_clone.lock().unwrap();
-                for j in 0..chunk.len() { //for each part of the chunk we attempt to cipher it then push the data to the results vector
-                    let keyed_cipher_guard = keyed_cipher_arcmut_clone.lock().unwrap();
-                    let current;
-                    if *keyed_cipher_guard == "autokey".to_string() {
-                        current = autokey_cipher(&message,&chunk[j],"dec");
-                        result_arcmutex_clone_guard.push((score_string(&current,&wordlist), current, (format!("Autokey - {}",&chunk[j])))); //push data as tuple
+                    //Results to be gathered later
+                    let mut result_arcmut_clone_guard = result_arcmut_clone.lock().unwrap();
 
-                    } else if *keyed_cipher_guard == "vigenere".to_string() {
-                        current = vigenere_cipher(&message,&chunk[j],"dec");
-                        result_arcmutex_clone_guard.push((score_string(&current,&wordlist), current, (format!("Vigenere - {}",&chunk[j])))); //push data as tuple
 
-                    } else if *keyed_cipher_guard == "simplesub".to_string() {
-                        current = simplesub_cipher(&message,&chunk[j],"dec");
-                        result_arcmutex_clone_guard.push((score_string(&current,&wordlist), current, (format!("Simplesub - {}",&chunk[j])))); //push data as tuple
+                    for j in 0..chunk.len() { //for each part of the chunk we attempt to cipher it then push the data to the results vector
+                        let keyed_cipher_guard = keyed_cipher_arcmut_clone.lock().unwrap();
+                        let current;
+                        
 
-                    } else if *keyed_cipher_guard == "columnar".to_string() {
-                        current = col_trans_cipher(&message,&chunk[j],"dec");
-                        result_arcmutex_clone_guard.push((score_string(&current,&wordlist), current, (format!("Columnar - {}",&chunk[j])))); //push data as tuple
+                        let mut namecopy = keyed_cipher_guard.clone();
+                        let upper_case_firstchar = namecopy.chars().next().expect("Error: Keyed cipher name not found!").to_uppercase();
+                        let lower_case_name = namecopy.remove(0);
+                        let keyed_cipher_name = format!("{}{} -",upper_case_firstchar,lower_case_name);
 
+                        
+                        if *keyed_cipher_guard == "autokey".to_string() { //run through the proper cipher
+                            current = autokey_cipher(&message,&chunk[j],"dec");
+
+                        } else if *keyed_cipher_guard == "vigenere".to_string() {
+                            current = vigenere_cipher(&message,&chunk[j],"dec");
+
+                        } else if *keyed_cipher_guard == "simplesub".to_string() {
+                            current = simplesub_cipher(&message,&chunk[j],"dec");
+
+                        } else { //columnar
+                            current = col_trans_cipher(&message,&chunk[j],"dec");
+                        }
+
+                        result_arcmut_clone_guard.push((score_string(&current,&wordlist), current, (format!("{} {}",keyed_cipher_name,&chunk[j])))); 
+                        //push data as tuple to results
                     }
         
-                }
-        
                 })
-            }).collect();
+            }).collect(); //collect handles
         
             //joins the handles
             for handle in handles {
                 handle.await.unwrap();
             }
             update_results("Collecting and joining results...".to_string(), result_arcmutex.clone());
-            for (score, message, type_of_cipher) in keycipher_result_arcmutex.lock().unwrap().iter() { 
+            for (score, message, type_of_cipher) in keycipher_result_arcmut.lock().unwrap().iter() { 
                 results.push((*score, message.to_string(), type_of_cipher.to_string())); //push data as tuple
             }
             

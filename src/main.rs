@@ -1,4 +1,4 @@
-//#![windows_subsystem = "windows"] //hides windows terminal by default since it's not necessary w/ the GUI.
+#![windows_subsystem = "windows"] //hides windows terminal by default since it's not necessary w/ the GUI.
 
 mod ciphers;
 use eframe::egui;
@@ -133,7 +133,7 @@ impl eframe::App for MainWindow {
                     ui.separator();
                 }
                 x if x.contains("affine") => {
-                    ui.label("Secret Key a"); //a,b : i32
+                    ui.label("Secret Key a");
                     ui.add(
                         egui::Slider::new(int_a,1..=25).step_by(2.0)
                     );
@@ -141,7 +141,7 @@ impl eframe::App for MainWindow {
                         ui.colored_label(Color32::RED, "13 is not coprime to 26!");
                     }
                     
-                    ui.label("Secret Key b"); //a,b : i32
+                    ui.label("Secret Key b");
                     ui.add(
                         egui::DragValue::new(int_b).clamp_range(1..=26)
                     );
@@ -149,7 +149,7 @@ impl eframe::App for MainWindow {
                     ui.separator();
                 }
                 x if x.contains("railfence") => {
-                    ui.label("Secret Key"); //a: i32ui.add(i32)
+                    ui.label("Secret Key");
                     ui.add(
                         egui::DragValue::new(int_a).clamp_range(2..=message_input.len())
                     );
@@ -157,7 +157,7 @@ impl eframe::App for MainWindow {
                     ui.separator();
                 }
                 x if x.contains("caesar") => {
-                    ui.label("Secret Key"); //a: i32ui.add(i32)
+                    ui.label("Secret Key");
                     ui.add(
                         egui::DragValue::new(int_a).clamp_range(1..=80)
                     );
@@ -213,7 +213,7 @@ impl eframe::App for MainWindow {
                 *bruteforce_selections.get_mut("columnar").expect("Not found!") == true ||
                 *bruteforce_selections.get_mut("simplesub").expect("Not found!") == true //these are the keyed-ciphers
                  {
-                    ui.label("% of words to check"); //a: i32ui.add(i32)
+                    ui.label("% of words to check");
                     ui.add(    
                         egui::DragValue::new(float_percent).clamp_range(1.0..=100.0)
                     );
@@ -268,8 +268,10 @@ impl eframe::App for MainWindow {
                 ui.vertical_centered(|ui| {
                     let res_string = result.lock().unwrap().clone();
                     ui.label(format!("Resulting {} is: \t",result_description));
+
                     ui.label(format!("{res_string}")).highlight();
                     completion_progress = completion_percentage_arcmutex.lock().unwrap().clone() as f32;
+
                     if completion_progress > 0.0 {
                         let progress = completion_progress / 360.0;
                         let progress_bar = egui::ProgressBar::new(progress)

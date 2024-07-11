@@ -1,0 +1,19 @@
+[package]
+name = "cipher_toy"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+anyhow = "1.0.86"
+ascii = "1.1.0"
+eframe = "0.27.2"
+egui = "0.27.2"
+futures = "0.3.30"
+instant = "0.1.13"
+itertools = "0.13.0"
+modinverse = "0.1.1"
+poll-promise = "0.3.0"
+rand = "0.8.5"
+rand_pcg = "0.3.1"
+rand_seeder = "0.2.3"
+tokio = { version = "1.38.0", features = ["full"] }
