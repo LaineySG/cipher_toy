@@ -1,3 +1,9 @@
+**To run the ciphertool:**
+Download the newest release version and run the exe, or clone the git and run 'cargo build --release' or use your IDE's debug feature to build the project from the rust files. If you build it, make sure to download rockyou.txt and place it in src/data or bruteforcing will throw an error that the file could not be found. rockyou.txt can be found here: 
+https://github.com/brannondorsey/naive-hashcat/releases/download/data/rockyou.txt
+
+rockyou.txt is included in the release zip.
+
 Cipher tool that encodes and decodes test to various cipher types. 
 Currently allows for: 
 caesar, vigenere, atbash, affine, baconian, railfence, Polybius, Autokey, columnar transposition, and ROT13 cipher types. More to be added in the future.
