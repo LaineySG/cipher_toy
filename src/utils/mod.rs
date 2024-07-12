@@ -286,6 +286,13 @@ pub async fn bruteforce(message: &str, enc_type: &str,completion_percentage_arcm
         }
         update_percent_completion(percent_increment,completion_percentage_arcmutex.clone(),"add".to_string());
     }
+    if enc_type.contains("base64") {
+        update_results("Checking base64 cipher...".to_string(), result_arcmutex.clone());
+        let current: String;
+        current = ciphers::base64_cipher(message,"dec");
+        results.push((score_string(&current,&wordlist), current, "Base64".to_string())); //push data as tuple
+        update_percent_completion(percent_increment,completion_percentage_arcmutex.clone(),"add".to_string()); //adds to completion tally
+    }
     if enc_type.contains("autokey") || enc_type.contains("vigenere") || enc_type.contains("simplesub") || enc_type.contains("columnar") { //password-cracking brute forces
          //gets list of common passwords to attempt to brute force. Also allows for limiting by bruteforce limit since the file is huge. Converts it to a vector for easy access.
         

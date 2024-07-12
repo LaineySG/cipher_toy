@@ -11,6 +11,7 @@ const LOWERCASE_ASCII_OFFSET: i32 = 97;
 const UPPERCASE_ASCII_OFFSET: i32 = 65;
 const INTEGER_ASCII_OFFSET: i32 = 48; //48 is 0, 57 is 9
 const POLYBIUS_SQUARE: [[char;5];5] = [['a','b','c','d','e'],['f','g','h','i','j'],['k','l','m','n','o'], ['p','q','r','s','t'],['u','v','w','x','y']];
+const B64ARRAY: [char; 64] = ['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'I', 'J', 'K', 'L', 'M', 'N', 'O', 'P', 'Q', 'R', 'S', 'T', 'U', 'V', 'W', 'X', 'Y', 'Z', 'a', 'b', 'c', 'd', 'e', 'f', 'g', 'h', 'i', 'j', 'k', 'l', 'm', 'n', 'o', 'p', 'q', 'r', 's', 't', 'u', 'v', 'w', 'x', 'y', 'z', '0', '1', '2', '3', '4', '5', '6', '7', '8', '9', '+', '/'];
 
 
 /// Caesar cipher shifts the values of each character in the message by a set amount, the shift key. To decrypt, it simply reverses this (shifting backwards).
@@ -572,6 +573,90 @@ pub fn autokey_cipher(message: &str, key: &str, enc_type: &str) -> String {
     }
 }
 
+///Converts to base64 and back. Not much of a cipher, very insecure.
+pub fn base64_cipher(message: &str, enc_type: &str) -> String { 
+    let mut result = String::new();
+    if enc_type.contains("enc") {
+        for c in message.chars() {
+                    let _char_dec = c as u8 as i32; //Get the decimal char value
+                    let char_bin = format!("{_char_dec:08b}"); //convert it to 8-bit binary
+                    result.push_str(&char_bin);
+        }
+        while result.len() % 6 != 0 { //if not divisible by 6, pad with zeros
+            result.push('0');
+        }
+        while result.len() % 24 != 0 { //If it's not divisible by 24, pad with '2' to get = later
+            result.push('2');
+        }
+
+        //if the char is one digit, there will be 8 bits but we need a multiple of 6 bits. To achieve this, we will pad the final x bits with 0's, then pad with 2's until
+        //we have a multiple of 6 digits (ie, 24 bits). The 2's will become =, as is customary for base64.
+
+        //now we have binary stream, we go through 6 bits at a time and convert it to the base 64 value
+        let mut number_counter = 0;
+        let mut binary_dec = 0;
+        let mut output = String::new();
+        let mut padding_counter = 0;
+        for c in result.chars() {
+                let num = c as i32 - '0' as i32; //converts num to i32 from ascii representation
+                number_counter += 1;
+                if num == 1 {
+                    let power_exp = 6 - number_counter as i32; //power exponent is 6-the counter since it reads L to R, not R to L
+                    binary_dec += 2i32.pow(power_exp as u32); //convert it to dec
+
+                } else if num == 2 { //2 is used to signify padding
+                    padding_counter += 1;
+                }
+                if padding_counter >= 6 { //when padding item is found
+                    output.push_str("=");
+                    padding_counter = 0;
+                    number_counter = 0;
+                }
+                if number_counter >= 6 { //if counter if >=6, add the binary dec value and reset (since each # is a 6-bit binary)
+                    number_counter = 0;
+                    output.push(B64ARRAY[binary_dec as usize]);
+                    binary_dec = 0;
+                }
+        }
+        output
+    } else { //dec
+        //First, we have the b64 string. We go through 1 char at a time and convert it to its 6 bit representation. We ignore the = padding.
+        let mut binary_dec = 0;
+        let mut output = String::new();
+        for c in message.chars() {
+            if c != '=' {
+                for (idx, val) in B64ARRAY.iter().enumerate() {
+                    if &c == val {
+                        binary_dec = idx;
+                    }
+                }
+                let _char_dec = binary_dec as u8 as i32; //Get the decimal char value as i32
+                let char_bin = format!("{_char_dec:06b}"); //convert it to 6-bit binary
+                output.push_str(&char_bin);
+            }
+        }
+        while output.len() % 8 != 0 { //remove the 0's that were added to pad it to 6 bits. Then we will have the 8 bit representations
+            output.pop();
+        }
+        //finally, convert the 8 bit representations back to decimal then back to ascii
+        let mut number_counter = 0;
+        let mut binary_dec = 0;
+        for c in output.chars() {
+            number_counter += 1;
+            if c == '1' {
+                let power_exp = 8 - number_counter as i32; //power exponent is 6-the counter since it reads L to R, not R to L
+                binary_dec += 2i32.pow(power_exp as u32); //convert it to dec
+            }
+            if number_counter >= 8 {
+                number_counter = 0;
+                result.push(binary_dec as u8 as char);
+                binary_dec = 0;
+            }
+        }
+        result
+    }
+}
+
 //Ciphers to add:
 //beaufort cipher
 //porta cipher
@@ -584,5 +669,4 @@ pub fn autokey_cipher(message: &str, key: &str, enc_type: &str) -> String {
 //bifid cipher
 //straddle checkerboard cipher
 //trifid cipher
-//base64 cipher
 //fractionated morse code cipher

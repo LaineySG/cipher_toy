@@ -1,4 +1,4 @@
-#![windows_subsystem = "windows"] //hides windows terminal by default since it's not necessary w/ the GUI.
+//#![windows_subsystem = "windows"] //hides windows terminal by default since it's not necessary w/ the GUI.
 
 mod ciphers;
 mod utils;
@@ -30,7 +30,7 @@ struct MainWindow {
 
 #[derive(Debug, PartialEq)]
 enum SelectedActionEnum {
-    Caesar,Vigenere,Atbash,Affine,Baconian,Polybius,SimpleSub,RailFence,Rot13,Bruteforce, Score,Autokey,Columnar
+    Caesar,Vigenere,Atbash,Affine,Baconian,Polybius,SimpleSub,RailFence,Rot13,Bruteforce,Score,Autokey,Columnar,Base64
 }
 impl fmt::Display for SelectedActionEnum {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
@@ -69,7 +69,7 @@ impl MainWindow {
                 ("affine".to_string(), false),("railfence".to_string(), false),
                 ("baconian".to_string(), false),("polybius".to_string(), false),
                 ("rot13".to_string(), false), ("vigenere".to_string(), false),
-                ("columnar".to_string(), false),
+                ("columnar".to_string(), false),("base64".to_string(),false),
             ]),
         }
     }
@@ -122,13 +122,14 @@ impl eframe::App for MainWindow {
                     ui.selectable_value(selected_action, SelectedActionEnum::RailFence, "Railfence Cipher");
                     ui.selectable_value(selected_action, SelectedActionEnum::Rot13, "ROT13 Cipher");
                     ui.selectable_value(selected_action, SelectedActionEnum::Autokey, "Autokey Cipher");
+                    ui.selectable_value(selected_action, SelectedActionEnum::Base64, "Base64 Cipher");
                     ui.selectable_value(selected_action, SelectedActionEnum::Columnar, "Columnar Transpositional Cipher");
                     ui.selectable_value(selected_action, SelectedActionEnum::Bruteforce, "Bruteforce");
                     ui.selectable_value(selected_action, SelectedActionEnum::Score, "Score String");
                 });
             ui.separator();
             match selected_action.to_string().to_lowercase() {
-                x if x.contains("simplesub") || (x.contains("vigenere") && !x.contains("bruteforce")) || x.contains("autokey") || x.contains("column") => {
+                x if x.contains("simplesub") || x.contains("vigenere") || x.contains("autokey") || x.contains("column") => {
                     ui.label("Secret Key");
                     ui.text_edit_singleline(key_input);
                     ui.separator();
@@ -195,6 +196,7 @@ impl eframe::App for MainWindow {
                             ui.checkbox(bruteforce_selections.get_mut("caesar").expect("Not found!"), "Caesar");
                             ui.checkbox(bruteforce_selections.get_mut("simplesub").expect("Not found!"), "*SimpleSub");
                             ui.checkbox(bruteforce_selections.get_mut("autokey").expect("Not found!"), "*Autokey");
+                            ui.checkbox(bruteforce_selections.get_mut("base64").expect("Not found!"), "Base64");
                         });
                         ui.horizontal(|ui| {
                             ui.checkbox(bruteforce_selections.get_mut("atbash").expect("Not found!"), "Atbash");
@@ -347,6 +349,10 @@ async fn run_operations(message_input:String,selected_action:String,secret_key:S
                 String::from("Error: For the railfence cipher, the secret key must be an integer!")
             }
         },
+        opt if opt.contains("base64") => {
+            let result = ciphers::base64_cipher(&message_input, &encrypt_or_decrypt);
+            result
+        },
         opt if opt.contains("autokey") => {
             let result = ciphers::autokey_cipher(&message_input, &secret_key, &encrypt_or_decrypt);
             result
@@ -459,6 +465,9 @@ fn get_info(selected_action:String) -> String {
         },
         opt if opt.contains("simplesub") => {
             String::from("A simple subsitution cipher is a common monoalphabetic substitution cipher that shifts letters by random values seeded by a given key password.")
+        },
+        opt if opt.contains("base64") => {
+            String::from("Base 64 encodes a string in base 64 (6-bit strings) and mapped to a set of 64 characters. It is not secure, but can be used as a primitive means of obscuring data to the untrained eye.")
         },
         opt if opt.contains("autokey") => {
             String::from("The autokey cipher is polyalphabetic substitution cipher that shifts values according to both the secret key and the plaintext, making the distribution of characters more similar than a vigenere cipher.")
