@@ -30,7 +30,7 @@ struct MainWindow {
 
 #[derive(Debug, PartialEq)]
 enum SelectedActionEnum {
-    Caesar,Vigenere,Atbash,Affine,Baconian,Polybius,SimpleSub,RailFence,Rot13,Bruteforce,Score,Autokey,Columnar,Base64
+    Caesar,Vigenere,Atbash,Affine,Baconian,Polybius,SimpleSub,RailFence,Rot13,Bruteforce,Score,Autokey,Columnar,Base64,Beaufort
 }
 impl fmt::Display for SelectedActionEnum {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
@@ -70,6 +70,7 @@ impl MainWindow {
                 ("baconian".to_string(), false),("polybius".to_string(), false),
                 ("rot13".to_string(), false), ("vigenere".to_string(), false),
                 ("columnar".to_string(), false),("base64".to_string(),false),
+                ("beaufort".to_string(), false),
             ]),
         }
     }
@@ -123,13 +124,14 @@ impl eframe::App for MainWindow {
                     ui.selectable_value(selected_action, SelectedActionEnum::Rot13, "ROT13 Cipher");
                     ui.selectable_value(selected_action, SelectedActionEnum::Autokey, "Autokey Cipher");
                     ui.selectable_value(selected_action, SelectedActionEnum::Base64, "Base64 Cipher");
+                    ui.selectable_value(selected_action, SelectedActionEnum::Beaufort, "Beaufort Cipher");
                     ui.selectable_value(selected_action, SelectedActionEnum::Columnar, "Columnar Transpositional Cipher");
                     ui.selectable_value(selected_action, SelectedActionEnum::Bruteforce, "Bruteforce");
                     ui.selectable_value(selected_action, SelectedActionEnum::Score, "Score String");
                 });
             ui.separator();
             match selected_action.to_string().to_lowercase() {
-                x if x.contains("simplesub") || x.contains("vigenere") || x.contains("autokey") || x.contains("column") => {
+                x if x.contains("simplesub") || x.contains("vigenere") || x.contains("autokey") || x.contains("beaufort") || x.contains("column") => {
                     ui.label("Secret Key");
                     ui.text_edit_singleline(key_input);
                     ui.separator();
@@ -182,8 +184,8 @@ impl eframe::App for MainWindow {
                 x if x.contains("bruteforce") => {
                     ui.vertical_centered(|ui| {
                         ui.horizontal(|ui| {
-                            if ui.checkbox(bruteforce_selections.get_mut("unknown").expect("Not found!"), "Check all").changed() {
-                                if *bruteforce_selections.get_mut("unknown").expect("Checkbox not found!") == true {
+                            if ui.checkbox(bruteforce_selections.get_mut("unknown").expect("Error: Selection not found!"), "Check all").changed() {
+                                if *bruteforce_selections.get_mut("unknown").expect("Error: Checkbox not found!") == true {
                                     for (_k,v) in bruteforce_selections.into_iter() {
                                         *v = true;
                                     }
@@ -193,28 +195,30 @@ impl eframe::App for MainWindow {
                                     }
                                 }
                             };
-                            ui.checkbox(bruteforce_selections.get_mut("caesar").expect("Not found!"), "Caesar");
-                            ui.checkbox(bruteforce_selections.get_mut("simplesub").expect("Not found!"), "*SimpleSub");
-                            ui.checkbox(bruteforce_selections.get_mut("autokey").expect("Not found!"), "*Autokey");
-                            ui.checkbox(bruteforce_selections.get_mut("base64").expect("Not found!"), "Base64");
+                            ui.checkbox(bruteforce_selections.get_mut("caesar").expect("Error: Selection not found!"), "Caesar");
+                            ui.checkbox(bruteforce_selections.get_mut("simplesub").expect("Error: Selection not found!"), "*SimpleSub");
+                            ui.checkbox(bruteforce_selections.get_mut("autokey").expect("Error: Selection not found!"), "*Autokey");
+                            ui.checkbox(bruteforce_selections.get_mut("base64").expect("Error: Selection not found!"), "Base64");
                         });
                         ui.horizontal(|ui| {
-                            ui.checkbox(bruteforce_selections.get_mut("atbash").expect("Not found!"), "Atbash");
-                            ui.checkbox(bruteforce_selections.get_mut("affine").expect("Not found!"), "Affine");
-                            ui.checkbox(bruteforce_selections.get_mut("railfence").expect("Not found!"), "Railfence");
-                            ui.checkbox(bruteforce_selections.get_mut("vigenere").expect("Not found!"), "*Vigenere");
+                            ui.checkbox(bruteforce_selections.get_mut("atbash").expect("Error: Selection not found!"), "Atbash");
+                            ui.checkbox(bruteforce_selections.get_mut("affine").expect("Error: Selection not found!"), "Affine");
+                            ui.checkbox(bruteforce_selections.get_mut("railfence").expect("Error: Selection not found!"), "Railfence");
+                            ui.checkbox(bruteforce_selections.get_mut("vigenere").expect("Error: Selection not found!"), "*Vigenere");
+                            ui.checkbox(bruteforce_selections.get_mut("beaufort").expect("Error: Selection not found!"), "*Beaufort");
                         });
                         ui.horizontal(|ui| {
-                            ui.checkbox(bruteforce_selections.get_mut("baconian").expect("Not found!"), "Baconian");
-                            ui.checkbox(bruteforce_selections.get_mut("polybius").expect("Not found!"), "Polybius");
-                            ui.checkbox(bruteforce_selections.get_mut("rot13").expect("Not found!"), "ROT13");
-                            ui.checkbox(bruteforce_selections.get_mut("columnar").expect("Not found!"), "*Columnar Transposition");
+                            ui.checkbox(bruteforce_selections.get_mut("baconian").expect("Error: Selection not found!"), "Baconian");
+                            ui.checkbox(bruteforce_selections.get_mut("polybius").expect("Error: Selection not found!"), "Polybius");
+                            ui.checkbox(bruteforce_selections.get_mut("rot13").expect("Error: Selection not found!"), "ROT13");
+                            ui.checkbox(bruteforce_selections.get_mut("columnar").expect("Error: Selection not found!"), "*Columnar Transposition");
                         });
                     });
-                    if *bruteforce_selections.get_mut("vigenere").expect("Not found!") == true ||
-                    *bruteforce_selections.get_mut("autokey").expect("Not found!") == true ||
-                    *bruteforce_selections.get_mut("columnar").expect("Not found!") == true ||
-                    *bruteforce_selections.get_mut("simplesub").expect("Not found!") == true //these are the keyed-ciphers
+                    if *bruteforce_selections.get_mut("vigenere").expect("Error: Selection not found!") == true ||
+                    *bruteforce_selections.get_mut("beaufort").expect("Error: Selection not found!") == true ||
+                    *bruteforce_selections.get_mut("autokey").expect("Error: Selection not found!") == true ||
+                    *bruteforce_selections.get_mut("columnar").expect("Error: Selection not found!") == true ||
+                    *bruteforce_selections.get_mut("simplesub").expect("Error: Selection not found!") == true //these are the keyed-ciphers
                     {
                         ui.label("% of words to check");
                         ui.add(    
@@ -314,6 +318,10 @@ async fn run_operations(message_input:String,selected_action:String,secret_key:S
             let result = ciphers::vigenere_cipher(&message_input, &secret_key, &encrypt_or_decrypt);
             result
         },
+        opt if opt.contains("beaufort") => {
+            let result = ciphers::beaufort_cipher(&message_input, &secret_key, &encrypt_or_decrypt);
+            result
+        },
         opt if opt.contains("atbash") => {
             let result = ciphers::atbash_cipher(&message_input);
             result
@@ -403,7 +411,7 @@ async fn run_operations(message_input:String,selected_action:String,secret_key:S
                 }
             }
             let mut bfl = 0;
-            if bruteforce_options_string.contains("vigenere") || bruteforce_options_string.contains("columnar") || 
+            if bruteforce_options_string.contains("vigenere") || bruteforce_options_string.contains("columnar") || bruteforce_options_string.contains("beaufort") ||
             bruteforce_options_string.contains("autokey") || bruteforce_options_string.contains("simplesub") {
                 if secret_key.parse::<f64>().is_ok() {
                     let keyasf64 = secret_key.trim().to_lowercase().parse::<f64>().unwrap();
@@ -436,8 +444,11 @@ fn get_info(selected_action:String) -> String {
         opt if opt.contains("caesar") => {
             String::from("A caesar cipher is a common monoalphabetic substitution cipher that shifts letters by a key called the shift value.")
         },
-        opt if opt.contains("vigenere") && !opt.contains("bruteforce") => {
+        opt if opt.contains("vigenere") => {
             String::from("A vigenere cipher is a common polyalphabetic substitution cipher that shifts letters by the values of a repeating key.")
+        },
+        opt if opt.contains("beaufort") => {
+            String::from("A beaufort cipher is a similar to a vigenere cipher, but the plaintext char is subtracted from the key instead of added.")
         },
         opt if opt.contains("atbash") => {
             String::from("An Atbash cipher is a common monoalphabetic substitution cipher that reverses the characters in a message.")

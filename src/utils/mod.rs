@@ -71,9 +71,11 @@ pub fn score_string(message: &str, word_list: &Vec<String>) -> f64 {
     for c in message.chars() {
         if c.is_alphabetic() {
             let current_char_int = ((c as u8) as i32) - LOWERCASE_ASCII_OFFSET;
-            let char_count = result_counts[current_char_int as usize] + 1; //increment the count
-            result_counts[current_char_int as usize] = char_count; //Set to incremented value
-            alphacounter += 1; 
+            if current_char_int < 26 {
+                let char_count = result_counts[current_char_int as usize] + 1; //increment the count
+                result_counts[current_char_int as usize] = char_count; //Set to incremented value
+                alphacounter += 1; 
+            }
         } else if  first_char { //if first word is non-alphabetic, increment new word counter
             new_word_counter+=1;
             first_char = false;
@@ -202,6 +204,7 @@ pub async fn bruteforce(message: &str, enc_type: &str,completion_percentage_arcm
     if enc_type.contains("vigenere") {keyedciphers.push("vigenere".to_string())};
     if enc_type.contains("columnar") {keyedciphers.push("columnar".to_string())};
     if enc_type.contains("simplesub") {keyedciphers.push("simplesub".to_string())};
+    if enc_type.contains("beaufort") {keyedciphers.push("beaufort".to_string())};
     for _i in 0..keyedciphers.len() {
         lengthcounter -= 1;
         keyedcipher_len = (bruteforce_limit as f32 / 14344392.0 * 100.0 * 5.0) as i32;
@@ -293,7 +296,7 @@ pub async fn bruteforce(message: &str, enc_type: &str,completion_percentage_arcm
         results.push((score_string(&current,&wordlist), current, "Base64".to_string())); //push data as tuple
         update_percent_completion(percent_increment,completion_percentage_arcmutex.clone(),"add".to_string()); //adds to completion tally
     }
-    if enc_type.contains("autokey") || enc_type.contains("vigenere") || enc_type.contains("simplesub") || enc_type.contains("columnar") { //password-cracking brute forces
+    if enc_type.contains("autokey") || enc_type.contains("vigenere") || enc_type.contains("simplesub") || enc_type.contains("beaufort") || enc_type.contains("columnar") { //password-cracking brute forces
          //gets list of common passwords to attempt to brute force. Also allows for limiting by bruteforce limit since the file is huge. Converts it to a vector for easy access.
         
         update_results("Loading password bruteforce list...".to_string(), result_arcmutex.clone());
@@ -326,6 +329,8 @@ pub async fn bruteforce(message: &str, enc_type: &str,completion_percentage_arcm
                 update_results("Checking simple substitution cipher...".to_string(), result_arcmutex.clone());
             } else if keyed_cipher.contains("columnar") {
                 update_results("Checking columnar transposition cipher...".to_string(), result_arcmutex.clone());
+            } else if keyed_cipher.contains("beaufort") {
+                update_results("Checking beaufort cipher...".to_string(), result_arcmutex.clone());
             }
 
 
@@ -406,8 +411,8 @@ pub async fn bruteforce(message: &str, enc_type: &str,completion_percentage_arcm
 
                         let mut namecopy = keyed_cipher_guard.clone();
                         let upper_case_firstchar = namecopy.chars().next().expect("Error: Keyed cipher name not found!").to_uppercase();
-                        let lower_case_name = namecopy.remove(0);
-                        let keyed_cipher_name = format!("{}{} -",upper_case_firstchar,lower_case_name);
+                        let _lower_case_name = namecopy.remove(0);
+                        let keyed_cipher_name = format!("{}{} -",upper_case_firstchar,namecopy);
 
                         
                         if *keyed_cipher_guard == "autokey".to_string() { //run through the proper cipher
@@ -418,6 +423,9 @@ pub async fn bruteforce(message: &str, enc_type: &str,completion_percentage_arcm
 
                         } else if *keyed_cipher_guard == "simplesub".to_string() {
                             current = ciphers::simplesub_cipher(&message,&chunk[j],"dec");
+
+                        } else if *keyed_cipher_guard == "beaufort".to_string() {
+                            current = ciphers::beaufort_cipher(&message,&chunk[j],"dec");
 
                         } else { //columnar
                             current = ciphers::col_trans_cipher(&message,&chunk[j],"dec");

@@ -657,16 +657,24 @@ pub fn base64_cipher(message: &str, enc_type: &str) -> String {
     }
 }
 
+///Similar to vigenere cipher, but instead of plaintext + key % 26, it's key - plaintext % 26. 
+/// Because of this, we can simply atbash to reverse the key then use the vigenere cipher.
+pub fn beaufort_cipher(message: &str, key: &str, enc_type: &str) -> String {
+    let reversed_key = atbash_cipher(key);
+    let result = vigenere_cipher(message, &reversed_key, enc_type);
+    result
+}
+
 //Ciphers to add:
-//beaufort cipher
+
 //porta cipher
-//running key cipher
-//homophonic substitution cipher
-//four square cipher
-//hill cipher
 //playfair cipher
+//four square cipher
+//running key cipher
 //ADFGX cipher
 //bifid cipher
-//straddle checkerboard cipher
-//trifid cipher
 //fractionated morse code cipher
+//hill cipher
+//trifid cipher
+//straddle checkerboard cipher
+//homophonic substitution cipher
