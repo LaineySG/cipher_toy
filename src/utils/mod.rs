@@ -5,6 +5,7 @@ use std::io::{self, stdout, BufRead};
 use std::path::Path;
 use std::time::Instant;
 use std::io::Write;
+use std::collections::HashMap;
 use std::sync::{Arc,Mutex};
 use tokio::*;
 use std::thread;
@@ -24,13 +25,60 @@ const LAST_LETTER_LIKELIHOOD: [(char, f64);10] = [('e',0.1917),('s',0.1435),('d'
 
 
 /// Shifts character while keeping it in a safe range of characters (stopping newline and other weird ascii chars as well as potential overflow)
-pub fn shift_char(c: char, shift: i32) -> char {
-    if (c as u8) < 48 || (c as u8) > 126 { //if it's a weird character don't shift it
+pub fn shift_char(c: char, shift: i32, settings: &HashMap<String, HashMap<String, Option<String>>>) -> char {
+    let mut ranges: Vec<(i32,i32)> = vec![];
+
+    //get settings and get range of allowable values depending on settings.
+    let alpha_settings = settings.get("alphabet options").unwrap();
+    let alpha_lower = alpha_settings.get("alphabet_lowercase").unwrap().clone().expect("err");
+    let alpha_upper = alpha_settings.get("alphabet_uppercase").unwrap().clone().expect("err");
+    let alpha_digits = alpha_settings.get("alphabet_digits").unwrap().clone().expect("err");
+    let alpha_specials = alpha_settings.get("alphabet_specials").unwrap().clone().expect("err");
+    if alpha_lower.contains("true") {ranges.push((97,122));}
+    if alpha_upper.contains("true") {ranges.push((65,90));}
+    if alpha_digits.contains("true") {ranges.push((48,57));}
+    if alpha_specials.contains("true") {ranges.push((33,47));ranges.push((58,64));ranges.push((91,96));}
+    ranges.sort_by(|a, b| a.0.partial_cmp(&b.0).unwrap_or(Ordering::Equal)); //Do a comparison to sort and get the best results.
+
+
+    if (c as u8) < 32 || (c as u8) > 127 { // ensure input is in range
         return c
     }
-    let shifted_value = c as u8 as i32 + shift; //Shift the value. rem_euclid takes modulus basically, but for signed numbers. This keeps it in range of 48 to 126
-    let wrapped_value = (shifted_value - 48).rem_euclid(79) + 48;
+    let shifted_value = c as u8 as i32 + shift; 
+    
+    let wrapped_value = wrap_within_ranges(shifted_value, ranges);
     wrapped_value as u8 as char
+}
+
+///Wraps a number within a set of ranges
+pub fn wrap_within_ranges(num: i32, ranges: Vec<(i32,i32)>) -> i32 {
+    let (lower_base, _) = ranges[0];
+    let (_, upper_cap) = ranges[ranges.len()-1];
+    let mut rem = (num).rem_euclid(upper_cap);
+    let mut prev_value = 0;
+    let mut toggle = false;
+    let mut gap;
+    if rem < ranges[0].0 {
+        rem += lower_base - 1;
+    }
+    for range in &ranges { //check range for wrapping
+        let (a,b) = range;
+
+        if *a <= rem && rem <= *b {
+            return rem
+        }    
+        if toggle && *a >= rem { //if in the gap, shift until it isn't
+            toggle = false;
+            gap = a - prev_value - 1;
+            rem += gap;
+        }    
+        if *b <= rem {
+            toggle = true;
+        }
+        
+        prev_value = *b;
+    }
+    rem
 }
 
 ///Scores likelihood that a string is plain english and thus decoded, based on relative frequencies of letters, common english words, bigrams (not yet), trigrams (not yet), first characters, and last characters in words.
@@ -191,7 +239,7 @@ pub fn update_results(results:String, result_arcmutex:Arc<Mutex<String>>) {
 }
  
 ///Attempts to brute force any cipher type except vigenere
-pub async fn bruteforce(message: &str, enc_type: &str,completion_percentage_arcmutex:Arc<Mutex<f32>>,bruteforce_limit:i32,result_arcmutex:Arc<Mutex<String>>,wordlistbool: bool) -> io::Result<String> {
+pub async fn bruteforce(message: &str, enc_type: &str,completion_percentage_arcmutex:Arc<Mutex<f32>>,bruteforce_limit:i32,result_arcmutex:Arc<Mutex<String>>,wordlistbool: bool, settings: &HashMap<String, HashMap<String, Option<String>>>) -> io::Result<String> {
     let mut wordlist: Vec<String> = vec![];
     let mut output:String = String::new();    
     let mut keyedcipher_len: i32 = 0;
@@ -213,21 +261,22 @@ pub async fn bruteforce(message: &str, enc_type: &str,completion_percentage_arcm
 
     let percent_increment = 1.0 / lengthcounter as f32 * 100.0; // 1 / the # of things to check.
 
-    let wordlist_path: &str;
-    if wordlistbool {
-        wordlist_path = "src/data/10000_most_common.txt";
+    
+    let file_loc_settings = settings.get("file locations").unwrap();
+    let word_list_path;
+    if wordlistbool { //10000
+        word_list_path = file_loc_settings.get("10000_word_list").unwrap().clone().expect("err");
     } else {
-        wordlist_path = "src/data/1000_most_common.txt";
+        word_list_path = file_loc_settings.get("1000_word_list").unwrap().clone().expect("err");
     }
-    if let Ok(lines) = read_lines(wordlist_path) {
+    if let Ok(lines) = read_lines(&word_list_path) {
         // Consumes the iterator, returns an (Optional) String
         for line in lines.flatten() {
             wordlist.push(line);
         }
     } else {
-        return Ok(format!("Error: Directory for wordlist not found. Please ensure that {} exists.",wordlist_path))
+        return Ok(format!("Error: Directory for wordlist not found. Please ensure that {} exists.",&word_list_path))
     }
-
     let mut results: Vec<(f64, String, String)> = vec![]; //unwrap option or set to unknown encryption type
     let now = Instant::now();
 
@@ -235,7 +284,7 @@ pub async fn bruteforce(message: &str, enc_type: &str,completion_percentage_arcm
         update_results("Checking caesar ciphers...".to_string(), result_arcmutex.clone());
         let mut current: String;
         for i in 1..=80 { //0 to 80 inclusive
-            current = ciphers::caesar_cipher(message, i, "dec");
+            current = ciphers::caesar_cipher(message, i, "dec",settings);
             results.push((score_string(&current,&wordlist), current, "Caesar".to_string())); //push data as tuple
         }
         update_percent_completion(percent_increment,completion_percentage_arcmutex.clone(),"add".to_string()); //adds to completion tally
@@ -243,21 +292,21 @@ pub async fn bruteforce(message: &str, enc_type: &str,completion_percentage_arcm
     if enc_type.contains("atbash") {
         update_results("Checking atbash cipher...".to_string(), result_arcmutex.clone());
         let current: String;
-        current = ciphers::atbash_cipher(message);
+        current = ciphers::atbash_cipher(message,settings);
         results.push((score_string(&current,&wordlist), current, "Atbash".to_string())); //push data as tuple
         update_percent_completion(percent_increment,completion_percentage_arcmutex.clone(),"add".to_string()); //adds to completion tally
     }
     if enc_type.contains("rot13") {
         update_results("Checking ROT13 cipher...".to_string(), result_arcmutex.clone());
         let current: String;
-        current = ciphers::rot13_cipher(message);
+        current = ciphers::rot13_cipher(message,settings);
         results.push((score_string(&current,&wordlist), current, "ROT13".to_string())); //push data as tuple
         update_percent_completion(percent_increment,completion_percentage_arcmutex.clone(),"add".to_string()); //adds to completion tally
     }
     if enc_type.contains("polybius") {
         update_results("Checking polybius cipher...".to_string(), result_arcmutex.clone());
         let current: String;
-        current = ciphers::polybius_cipher(message,"dec");
+        current = ciphers::polybius_cipher(message,"dec",settings);
         results.push((score_string(&current,&wordlist), current, "Polybius".to_string())); //push data as tuple
         update_percent_completion(percent_increment,completion_percentage_arcmutex.clone(),"add".to_string()); //adds to completion tally
     }
@@ -266,7 +315,7 @@ pub async fn bruteforce(message: &str, enc_type: &str,completion_percentage_arcm
         let mut current: String;
         for a in 0..=26 {
             for b in 0..=26 {
-                current = ciphers::affine_cipher(message,a,b,"dec");
+                current = ciphers::affine_cipher(message,a,b,"dec",settings);
                 results.push((score_string(&current,&wordlist), current, "Affine".to_string())); //push data as tuple
             }
         }
@@ -275,14 +324,14 @@ pub async fn bruteforce(message: &str, enc_type: &str,completion_percentage_arcm
     if enc_type.contains("baconian") {
         update_results("Checking baconian cipher...".to_string(), result_arcmutex.clone());
         let current: String;
-        current = ciphers::baconian_cipher(message, "dec");
+        current = ciphers::baconian_cipher(message, "dec",settings);
         results.push((score_string(&current,&wordlist), current, "Bacon".to_string())); //push data as tuple
         update_percent_completion(percent_increment,completion_percentage_arcmutex.clone(),"add".to_string()); //adds to completion tally
     }
     if enc_type.contains("railfence"){ 
         update_results("Checking railfence cipher...".to_string(), result_arcmutex.clone());
         for rails in 2..=message.len() {
-            let current = ciphers::railfence_cipher(message,rails as i32,"dec");
+            let current = ciphers::railfence_cipher(message,rails as i32,"dec",settings);
             let temp = format!("Railfence[{}]",rails);
             let rail_msg = &current[1..current.len()-1]; //removes apostrophes from rail message before scoring 
             results.push((score_string(&rail_msg,&wordlist), current, temp.clone())); //push data as tuple
@@ -292,7 +341,7 @@ pub async fn bruteforce(message: &str, enc_type: &str,completion_percentage_arcm
     if enc_type.contains("base64") {
         update_results("Checking base64 cipher...".to_string(), result_arcmutex.clone());
         let current: String;
-        current = ciphers::base64_cipher(message,"dec");
+        current = ciphers::base64_cipher(message,"dec",settings);
         results.push((score_string(&current,&wordlist), current, "Base64".to_string())); //push data as tuple
         update_percent_completion(percent_increment,completion_percentage_arcmutex.clone(),"add".to_string()); //adds to completion tally
     }
@@ -301,9 +350,12 @@ pub async fn bruteforce(message: &str, enc_type: &str,completion_percentage_arcm
         
         update_results("Loading password bruteforce list...".to_string(), result_arcmutex.clone());
 
-        async fn get_password_list (bruteforce_limit:i32) -> io::Result<Vec<String>> {
+        async fn get_password_list (bruteforce_limit:i32, settings: &HashMap<String, HashMap<String, Option<String>>>) -> io::Result<Vec<String>> {
             let mut password_list: Vec<String> = vec![];
-            if let Ok(lines) = read_lines("src/data/rockyou.txt") {
+            let file_loc_settings = settings.get("file locations").unwrap();
+            let password_list_path = file_loc_settings.get("password_list").unwrap().clone().expect("err");
+                    
+            if let Ok(lines) = read_lines(password_list_path) {
                 // Consumes the iterator, returns an (Optional) String
                 for line in lines.flatten().take(bruteforce_limit.clone() as usize){ //take only the specified line count
                     password_list.push(line);
@@ -313,10 +365,10 @@ pub async fn bruteforce(message: &str, enc_type: &str,completion_percentage_arcm
             Ok(password_list)
         }
         
-        let rock_you = match get_password_list(bruteforce_limit).await {
+        let rock_you = match get_password_list(bruteforce_limit, settings).await {
             Ok(list) => list,
             Err(_e) => {
-                return Ok("Error: rockyou.txt could not be located. Please ensure that 'src/data/rockyou.txt' exists.".to_string());
+                return Ok("Error: password list could not be located. Please ensure that it exists.".to_string());
             }
         };
 
@@ -354,6 +406,8 @@ pub async fn bruteforce(message: &str, enc_type: &str,completion_percentage_arcm
                 // Does some preliminary conversions. Clones the Arc data for safe access.
                 let message = message.to_string();
                 let chunk = chunk.to_vec(); //chunk of passwords to check
+                let settings = settings.clone();
+                let word_list_path = word_list_path.clone();
 
                 //Arc::clones all the values from before so they can be safely used in the tasks
                 let progress_bar_lock_arcmut_clone = Arc::clone(&progress_bar_lock);
@@ -392,12 +446,12 @@ pub async fn bruteforce(message: &str, enc_type: &str,completion_percentage_arcm
                     let _ = stdout().flush();
         
                     //Get the 1000 or 10000 most common words to give to score_string
-                    if let Ok(lines) = read_lines(wordlist_path) {
+                    if let Ok(lines) = read_lines(&word_list_path) {
                     for line in lines.flatten() {
                         wordlist.push(line);
                     }
                     } else {
-                        eprintln!("Error: Common words file could not be located. Ensure that {} exists.", wordlist_path);
+                        eprintln!("Error: Common words file could not be located. Ensure that {} exists.", &word_list_path);
                     }
         
                     //Results to be gathered later
@@ -416,19 +470,19 @@ pub async fn bruteforce(message: &str, enc_type: &str,completion_percentage_arcm
 
                         
                         if *keyed_cipher_guard == "autokey".to_string() { //run through the proper cipher
-                            current = ciphers::autokey_cipher(&message,&chunk[j],"dec");
+                            current = ciphers::autokey_cipher(&message,&chunk[j],"dec", &settings);
 
                         } else if *keyed_cipher_guard == "vigenere".to_string() {
-                            current = ciphers::vigenere_cipher(&message,&chunk[j],"dec");
+                            current = ciphers::vigenere_cipher(&message,&chunk[j],"dec", &settings);
 
                         } else if *keyed_cipher_guard == "simplesub".to_string() {
-                            current = ciphers::simplesub_cipher(&message,&chunk[j],"dec");
+                            current = ciphers::simplesub_cipher(&message,&chunk[j],"dec", &settings);
 
                         } else if *keyed_cipher_guard == "beaufort".to_string() {
-                            current = ciphers::beaufort_cipher(&message,&chunk[j],"dec");
+                            current = ciphers::beaufort_cipher(&message,&chunk[j],"dec", &settings);
 
                         } else { //columnar
-                            current = ciphers::col_trans_cipher(&message,&chunk[j],"dec");
+                            current = ciphers::col_trans_cipher(&message,&chunk[j],"dec", &settings);
                         }
 
                         result_arcmut_clone_guard.push((score_string(&current,&wordlist), current, (format!("{} {}",keyed_cipher_name,&chunk[j])))); 

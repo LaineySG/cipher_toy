@@ -15,20 +15,21 @@ const B64ARRAY: [char; 64] = ['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'I', 'J', 
 
 
 /// Caesar cipher shifts the values of each character in the message by a set amount, the shift key. To decrypt, it simply reverses this (shifting backwards).
-pub fn caesar_cipher(message: &str, shift: i32, enc_type: &str) -> String {
+pub fn caesar_cipher(message: &str, shift: i32, enc_type: &str, settings: &HashMap<String, HashMap<String, Option<String>>>) -> String {
     let mut result = String::new();
     let shift = if enc_type.contains("dec") { -shift } else { shift }; //If we're decrypting, shift should be backwards.
     for c in message.chars() { //For each character in the message to decrypt, we shift that char and push it to result
-        result.push(utils::shift_char(c, shift));
+    result.push(utils::shift_char(c, shift,settings));
     }
     result //Then return result
 }
 
 /// Vigenere cipher shifts the values of each character in the message by the value of a character in a repeating key. 
 /// To decrypt, it simply reverses this (shifting backwards).
-pub fn vigenere_cipher(message: &str, key: &str, enc_type: &str) -> String {
+pub fn vigenere_cipher(message: &str, key: &str, enc_type: &str, settings: &HashMap<String, HashMap<String, Option<String>>>) -> String {
     let mut result = String::new();
     let mut key_cursor:usize = 0;
+    let message = message.to_lowercase();
     let default:&str = "key";
 
 
@@ -52,7 +53,6 @@ pub fn vigenere_cipher(message: &str, key: &str, enc_type: &str) -> String {
             }
 
             let mut shift = 0;
-
             //Grab the value of the key as an integer, subtract the base ascii offset for lowercase characters and save it as the shift value. 
             //Decrypt is same but shift becomes negative
             if enc_type.contains("enc") {
@@ -61,15 +61,18 @@ pub fn vigenere_cipher(message: &str, key: &str, enc_type: &str) -> String {
                 shift = -((key_ascii_arr[key_cursor] as i32) - LOWERCASE_ASCII_OFFSET);
             }
 
-            key_cursor += 1;
-            //println!("Shifted to char: {}, {}", &shift_char(current_char, shift).to_string(), shift_char(current_char, shift) as u8);
-            result += &utils::shift_char(current_char, shift).to_string(); //Finally, add the shifted char as a string, to result.
+            if !current_char.is_whitespace() && !current_char.is_numeric() {
+                key_cursor += 1; //only increment if it's not whitespace/numeric
+                result += &utils::shift_char(current_char, shift,settings).to_string(); //Finally, add the shifted char as a string, to result.
+            } else {
+                result += &current_char.to_string();
+            }
         }
     result
 }
 
 /// The atbash cipher takes a message and reverses all characters in the string.
-pub fn atbash_cipher(message: &str) -> String {
+pub fn atbash_cipher(message: &str, settings: &HashMap<String, HashMap<String, Option<String>>>) -> String {
     let mut result = String::new();
     for c in message.chars() { //For each character in the message to decrypt, we reverse that char and push it to result
         let out = match c {
@@ -92,7 +95,7 @@ pub fn atbash_cipher(message: &str) -> String {
 }
 
 /// The rot13 cipher takes a message and rotates all alpha chars by 13 as if on a wheel.
-pub fn rot13_cipher(message: &str) -> String {
+pub fn rot13_cipher(message: &str, settings: &HashMap<String, HashMap<String, Option<String>>>) -> String {
     let mut result = String::new();
     const ROT13_SHIFT: i32 = 13;
     for c in message.chars() { //For each character in the message to decrypt, we reverse that char and push it to result
@@ -114,7 +117,7 @@ pub fn rot13_cipher(message: &str) -> String {
 }
 
 /// The affine cipher takes a message and performs the modification: *a + b on each character. To decrypt, it performs /a - b.
-pub fn affine_cipher(message: &str, a: i32, b: i32, enc_type: &str) -> String {
+pub fn affine_cipher(message: &str, a: i32, b: i32, enc_type: &str, settings: &HashMap<String, HashMap<String, Option<String>>>) -> String {
     let mut result = String::new();
     for c in message.chars() {
         let out = match c {
@@ -163,7 +166,7 @@ pub fn affine_cipher(message: &str, a: i32, b: i32, enc_type: &str) -> String {
 /// A baconian cipher converts characters to binary, then that binary is changed such that 0's are a's, and 1's are b's. It can also use different
 /// typefaces such as CAPS for 1's and lowercase for 0's. This particular method creates a random string of numbers where high numbers signify 1's and low
 /// numbers signify 0's. This helps to obfuscate the data.
-pub fn baconian_cipher(message:&str, enc_type: &str) -> String {
+pub fn baconian_cipher(message:&str, enc_type: &str, settings: &HashMap<String, HashMap<String, Option<String>>>) -> String {
     //converts ascii chars to digits, then 5bit binary. This can then be converted to strings of random numbers 
     //where 0,1,2,3,4,5,6 are binary 0's and 7,8,9 are binary 1's. 
     let mut result = String::new();
@@ -246,7 +249,7 @@ pub fn baconian_cipher(message:&str, enc_type: &str) -> String {
 }
 
 ///Transpositional cipher that shuffles each character as though it is placed in a zig-zag pattern along a rail.
-pub fn railfence_cipher(message: &str, rails: i32, enc_type: &str) -> String {
+pub fn railfence_cipher(message: &str, rails: i32, enc_type: &str, settings: &HashMap<String, HashMap<String, Option<String>>>) -> String {
     let message = &message.trim();
     let mut rail_matrix:Vec<Vec<char>> = vec![];
     let mut result = String::new();
@@ -337,7 +340,7 @@ pub fn railfence_cipher(message: &str, rails: i32, enc_type: &str) -> String {
 }  
 
 ///Substitutes characters based on a polybius 5x5 table one row down
-pub fn polybius_cipher(message: &str, enc_type: &str) -> String {
+pub fn polybius_cipher(message: &str, enc_type: &str, settings: &HashMap<String, HashMap<String, Option<String>>>) -> String {
     let message = &message.to_lowercase(); //turns message lowercase
     let mut result:String = String::new();
     if enc_type.contains("enc") {
@@ -383,7 +386,7 @@ pub fn polybius_cipher(message: &str, enc_type: &str) -> String {
 }
 
 ///Substitutes based on a random shuffle amount (a seed for randomization)
-pub fn simplesub_cipher(message: &str,seed: &str,enc_type: &str) -> String {
+pub fn simplesub_cipher(message: &str,seed: &str,enc_type: &str, settings: &HashMap<String, HashMap<String, Option<String>>>) -> String {
     let mut alphabet: [char;26] = ['a','b','c','d','e','f','g','h','i','j','k','l','m','n','o','p','q','r','s','t','u','v','w','x','y','z'];
     let mut rng: Pcg64 = Seeder::from(seed).make_rng();
     alphabet.shuffle(&mut rng);
@@ -413,7 +416,7 @@ pub fn simplesub_cipher(message: &str,seed: &str,enc_type: &str) -> String {
 }
 
 ///Columnal transpositional cipher, shifts columns in a table based on the keys to alphabetical order then reads vertically
-pub fn col_trans_cipher(message: &str,mut key: &str,enc_type: &str) -> String {
+pub fn col_trans_cipher(message: &str,mut key: &str,enc_type: &str, settings: &HashMap<String, HashMap<String, Option<String>>>) -> String {
     let mut result = String::new();
     let mut dict: HashMap<char, Vec<char>> = HashMap::new();
     if enc_type.contains("enc") {
@@ -493,7 +496,7 @@ pub fn col_trans_cipher(message: &str,mut key: &str,enc_type: &str) -> String {
 }
 
 ///Similar to vigenere but uses the messages itself to cipher following the key.
-pub fn autokey_cipher(message: &str, key: &str, enc_type: &str) -> String {
+pub fn autokey_cipher(message: &str, key: &str, enc_type: &str, settings: &HashMap<String, HashMap<String, Option<String>>>) -> String {
     //encrypt: take key, add ciphertext, that's new key
     //decrypt: take key, decrypt first x letters, then add them to end, repeat until finished.
     let mut key_string; //This will store our computed key
@@ -523,7 +526,7 @@ pub fn autokey_cipher(message: &str, key: &str, enc_type: &str) -> String {
         for (idx, current_char) in message.chars().enumerate() { //returns index and char for each char in message.    
             if key_ascii_arr[idx].is_alphabetic() {
                 let shift = (key_ascii_arr[idx] as i32) - LOWERCASE_ASCII_OFFSET;
-                result.push(utils::shift_char(current_char, shift)); //push the shifted char based on the shift from the key.
+                result.push(utils::shift_char(current_char, shift,settings)); //push the shifted char based on the shift from the key.
             } else {
                 result.push(current_char);
             }
@@ -561,7 +564,7 @@ pub fn autokey_cipher(message: &str, key: &str, enc_type: &str) -> String {
                     if idx < key_ascii_arr.len() {
                         if key_ascii_arr[idx].is_alphabetic() {
                             let shift = (key_ascii_arr[idx] as i32) - LOWERCASE_ASCII_OFFSET;
-                            result.push(utils::shift_char(current_char, -shift));
+                            result.push(utils::shift_char(current_char, -shift,settings));
                         } else {
                             result.push(current_char);
                         }
@@ -574,7 +577,7 @@ pub fn autokey_cipher(message: &str, key: &str, enc_type: &str) -> String {
 }
 
 ///Converts to base64 and back. Not much of a cipher, very insecure.
-pub fn base64_cipher(message: &str, enc_type: &str) -> String { 
+pub fn base64_cipher(message: &str, enc_type: &str, settings: &HashMap<String, HashMap<String, Option<String>>>) -> String { 
     let mut result = String::new();
     if enc_type.contains("enc") {
         for c in message.chars() {
@@ -659,9 +662,9 @@ pub fn base64_cipher(message: &str, enc_type: &str) -> String {
 
 ///Similar to vigenere cipher, but instead of plaintext + key % 26, it's key - plaintext % 26. 
 /// Because of this, we can simply atbash to reverse the key then use the vigenere cipher.
-pub fn beaufort_cipher(message: &str, key: &str, enc_type: &str) -> String {
-    let reversed_key = atbash_cipher(key);
-    let result = vigenere_cipher(message, &reversed_key, enc_type);
+pub fn beaufort_cipher(message: &str, key: &str, enc_type: &str, settings: &HashMap<String, HashMap<String, Option<String>>>) -> String {
+    let reversed_key = atbash_cipher(key,settings);
+    let result = vigenere_cipher(message, &reversed_key, enc_type,settings);
     result
 }
 
