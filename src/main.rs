@@ -137,7 +137,7 @@ impl MainWindow {
                 loaded_settings.insert("alphabet_specials".to_string(), alphabet_specials);
                 
             },
-            Err(e) => {
+            Err(_e) => {
                 config.set("File Locations", "password_list", Some(String::from("src/data/rockyou.txt")));
                 config.set("File Locations", "1000_word_list", Some(String::from("src/data/1000_most_common.txt")));
                 config.set("File Locations", "10000_word_list", Some(String::from("src/data/10000_most_common.txt")));
@@ -159,7 +159,7 @@ impl MainWindow {
     fn update_settings(settings: HashMap<String,bool>,password_list: String) -> Result<(), Box<dyn Error>>  {
         let mut config = Ini::new();
         
-        let config_file_map = config.load("src/settings.ini");
+        let _config_file_map = config.load("src/settings.ini");
         let alpha_lower = settings.get("alphabet_lowercase").expect("Error retrieving alphabet_lowercase settings.").to_string();
         let alpha_upper = settings.get("alphabet_uppercase").expect("Error retrieving alphabet_uppercase settings.").to_string();
         let alpha_specials = settings.get("alphabet_specials").expect("Error retrieving alphabet_specials settings.").to_string();
@@ -181,13 +181,13 @@ impl MainWindow {
     
     fn retrieve_settings () -> io::Result<HashMap<String, HashMap<String, Option<String>>>> {
         let mut config = Ini::new();
-        let loaded_settings: HashMap<String,String> = HashMap::new();
+        //let _loaded_settings: HashMap<String,String> = HashMap::new();
         let config_file_map = config.load("src/settings.ini");
         match config_file_map {
             Ok(map) => {
                 return Ok(map);
             }
-            Err (e) => { //if error, initialize settings again then attempt to retrieve again.
+            Err (_e) => { //if error, initialize settings again then attempt to retrieve again.
                 let _ = Self::init_settings();
                 return Self::retrieve_settings();
             }
@@ -237,7 +237,7 @@ impl eframe::App for MainWindow {
                     ui.text_edit_singleline(password_list);
                 ui.vertical_centered(|ui| {
                     if ui.button("Update Settings").clicked() {
-                        MainWindow::update_settings(settings.clone(), password_list.clone());
+                        let _ = MainWindow::update_settings(settings.clone(), password_list.clone());
                     }
                  });
             });
