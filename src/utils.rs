@@ -29,11 +29,11 @@ pub fn shift_char(c: char, shift: i32, settings: &HashMap<String, HashMap<String
     let mut ranges: Vec<(i32,i32)> = vec![];
 
     //get settings and get range of allowable values depending on settings.
-    let alpha_settings = settings.get("alphabet options").unwrap();
-    let alpha_lower = alpha_settings.get("alphabet_lowercase").unwrap().clone().expect("err");
-    let alpha_upper = alpha_settings.get("alphabet_uppercase").unwrap().clone().expect("err");
-    let alpha_digits = alpha_settings.get("alphabet_digits").unwrap().clone().expect("err");
-    let alpha_specials = alpha_settings.get("alphabet_specials").unwrap().clone().expect("err");
+    let alpha_settings = settings.get("alphabet options").expect("Alphabet_options settings could not be retrieved.");
+    let alpha_lower = alpha_settings.get("alphabet_lowercase").expect("Alpha_lowercase settings could not be retrieved.").clone().expect("Error cloning alpha_lowercase settings.");
+    let alpha_upper = alpha_settings.get("alphabet_uppercase").expect("Alpha_uppercase settings could not be retrieved.").clone().expect("Error cloning alpha_uppercase settings.");
+    let alpha_digits = alpha_settings.get("alphabet_digits").expect("Alpha_digits settings could not be retrieved.").clone().expect("Error cloning alpha_digits settings.");
+    let alpha_specials = alpha_settings.get("alphabet_specials").expect("Alpha_specials settings could not be retrieved.").clone().expect("Error cloning alpha_specials settings.");
     if alpha_lower.contains("true") {ranges.push((97,122));}
     if alpha_upper.contains("true") {ranges.push((65,90));}
     if alpha_digits.contains("true") {ranges.push((48,57));}
@@ -209,7 +209,7 @@ pub fn read_lines<P>(filename: P) -> io::Result<io::Lines<io::BufReader<File>>> 
 pub fn update_percent_completion(percent:f32,completion_percentage_arcmutex:Arc<Mutex<f32>>,update_type:String) {
     if update_type.contains("add") {
             let handle = thread::spawn(move || {
-                let mut num = completion_percentage_arcmutex.lock().unwrap();
+                let mut num = completion_percentage_arcmutex.lock().expect("Completion percentage arcmutex could not be retrieved.");
                 if (*num + (percent as f32) / 100.0 * 360.0) <= 360.0 {
                     *num += (percent as f32) / 100.0 * 360.0;
                 } else {
@@ -219,23 +219,23 @@ pub fn update_percent_completion(percent:f32,completion_percentage_arcmutex:Arc<
                     *num = 359.0;
                 }
             });
-            handle.join().unwrap();
+            handle.join().expect("Handles could not be joined after adding to completion percentage.");
     } else { //set
         let handle = thread::spawn(move || {
-            let mut num = completion_percentage_arcmutex.lock().unwrap();
+            let mut num = completion_percentage_arcmutex.lock().expect("Completion percentage arcmut could not be retrieved.");
             *num = (percent as f32) / 100.0 * 360.0;
         });
-        handle.join().unwrap();
+        handle.join().expect("Handles could not be joined after updating completion percentage.");
     }
 }
 
 ///Updates the results with a new message
 pub fn update_results(results:String, result_arcmutex:Arc<Mutex<String>>) {
     let handle = thread::spawn(move || {
-        let mut res = result_arcmutex.lock().unwrap();
+        let mut res = result_arcmutex.lock().expect("Result arcmut could not be retrieved.");
         *res = results;
     });
-    handle.join().unwrap();
+    handle.join().expect("Handles could not be joined during result message update.");
 }
  
 ///Attempts to brute force any cipher type except vigenere
@@ -262,12 +262,12 @@ pub async fn bruteforce(message: &str, enc_type: &str,completion_percentage_arcm
     let percent_increment = 1.0 / lengthcounter as f32 * 100.0; // 1 / the # of things to check.
 
     
-    let file_loc_settings = settings.get("file locations").unwrap();
+    let file_loc_settings = settings.get("file locations").expect("File location settings could not be found.");
     let word_list_path;
     if wordlistbool { //10000
-        word_list_path = file_loc_settings.get("10000_word_list").unwrap().clone().expect("err");
+        word_list_path = file_loc_settings.get("10000_word_list").expect("File location setting for 10,000 word list could not be found.").clone().expect("Error retrieving 10,000 word list setting.");
     } else {
-        word_list_path = file_loc_settings.get("1000_word_list").unwrap().clone().expect("err");
+        word_list_path = file_loc_settings.get("1000_word_list").expect("File location setting for 1000 word list could not be found.").clone().expect("Error retrieving 1000 word list setting.");
     }
     if let Ok(lines) = read_lines(&word_list_path) {
         // Consumes the iterator, returns an (Optional) String
@@ -352,8 +352,8 @@ pub async fn bruteforce(message: &str, enc_type: &str,completion_percentage_arcm
 
         async fn get_password_list (bruteforce_limit:i32, settings: &HashMap<String, HashMap<String, Option<String>>>) -> io::Result<Vec<String>> {
             let mut password_list: Vec<String> = vec![];
-            let file_loc_settings = settings.get("file locations").unwrap();
-            let password_list_path = file_loc_settings.get("password_list").unwrap().clone().expect("err");
+            let file_loc_settings = settings.get("file locations").expect("File location settings could not be retrieved.");
+            let password_list_path = file_loc_settings.get("password_list").expect("Password_list location settings could not be retrieved.").clone().expect("Error cloning password_list location settings.");
                     
             if let Ok(lines) = read_lines(password_list_path) {
                 // Consumes the iterator, returns an (Optional) String
@@ -423,14 +423,14 @@ pub async fn bruteforce(message: &str, enc_type: &str,completion_percentage_arcm
                     let mut wordlist: Vec<String> = vec![];
                     
                     //Outputs the % finished amount
-                    let mut thread_counter = thread_counter.lock().unwrap();
+                    let mut thread_counter = thread_counter.lock().expect("Error retrieving thread counter arcmut.");
                     *thread_counter += 1;
 
                     //pct tracks the percent based on the thread number. bruteforcelimit / 1000 is the chunk size. Multiplies by 100 to get as %.
                     let percent_threads = *thread_counter as f64 * 100.0 / (bruteforce_limit as f64 / 1000.0);
                     
-                    let mutex_guard = keyedcipher_pct_arc_clone.lock().unwrap();  //This is the % that the keyed cipher in question has to fill
-                    let mut progress_bar_lock_guard = progress_bar_lock_arcmut_clone.lock().unwrap();
+                    let mutex_guard = keyedcipher_pct_arc_clone.lock().expect("Error retrieving keyed cipher percent arcmut.");  //This is the % that the keyed cipher in question has to fill
+                    let mut progress_bar_lock_guard = progress_bar_lock_arcmut_clone.lock().expect("Error retrieving progress bar lock arcmut.");
 
                     if percent_threads.floor() % 4.0 <= 1.0 { //every 4%, update the progress bar with 1/25th of the total percentage allotted to the keyed cipher.
                         if !*progress_bar_lock_guard {
@@ -455,11 +455,11 @@ pub async fn bruteforce(message: &str, enc_type: &str,completion_percentage_arcm
                     }
         
                     //Results to be gathered later
-                    let mut result_arcmut_clone_guard = result_arcmut_clone.lock().unwrap();
+                    let mut result_arcmut_clone_guard = result_arcmut_clone.lock().expect("error retrieving result arcmut.");
 
 
                     for j in 0..chunk.len() { //for each part of the chunk we attempt to cipher it then push the data to the results vector
-                        let keyed_cipher_guard = keyed_cipher_arcmut_clone.lock().unwrap();
+                        let keyed_cipher_guard = keyed_cipher_arcmut_clone.lock().expect("Error retrieving keyed cipher arcmut.");
                         let current;
                         
 
@@ -494,10 +494,10 @@ pub async fn bruteforce(message: &str, enc_type: &str,completion_percentage_arcm
         
             //joins the handles
             for handle in handles {
-                handle.await.unwrap();
+                handle.await.expect("Error joining handles following bruteforce.");
             }
             update_results("Collecting and joining results...".to_string(), result_arcmutex.clone());
-            for (score, message, type_of_cipher) in keycipher_result_arcmut.lock().unwrap().iter() { 
+            for (score, message, type_of_cipher) in keycipher_result_arcmut.lock().expect("Error retrieving keyed cipher result arcmut.").iter() { 
                 results.push((*score, message.to_string(), type_of_cipher.to_string())); //push data as tuple
             }
             
@@ -526,7 +526,7 @@ pub async fn bruteforce(message: &str, enc_type: &str,completion_percentage_arcm
     }
     for (score, message, type_of_cipher) in results.iter() {  //put the other attempts in the brute force results file
         let line_str = format!("({:.2}): {} [{}]\n", score, message.trim(), type_of_cipher.trim());
-        write!(&file, "{}", line_str).unwrap();
+        write!(&file, "{}", line_str).expect("Error writing to results file.");
     }
     update_percent_completion(100.0, completion_percentage_arcmutex.clone(), "set".to_string());
 

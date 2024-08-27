@@ -38,7 +38,7 @@ pub fn vigenere_cipher(message: &str, key: &str, enc_type: &str, settings: &Hash
         let idx_key = match indexed_key {
             Ok(val) => val,
             Err(_e) => {
-                AsciiStr::from_ascii(default).unwrap()
+                AsciiStr::from_ascii(default).expect("Ascii bytes couldn't be converted to a string.")
             }
         };
 
@@ -301,7 +301,7 @@ pub fn railfence_cipher(message: &str, rails: i32, enc_type: &str, settings: &Ha
 
 
         //Converts the messasge to ascii, then slices it into an array of ascii characters (so it can be indexed properly)
-        let indexed_message = AsciiStr::from_ascii(message).unwrap(); 
+        let indexed_message = AsciiStr::from_ascii(message).expect("Couldn't get ascii from bytes."); 
         let message_ascii_arr = indexed_message.as_slice();
 
         //Now we will the rail matrix with the correct items
@@ -350,7 +350,7 @@ pub fn polybius_cipher(message: &str, enc_type: &str, settings: &HashMap<String,
                     if POLYBIUS_SQUARE[j].contains(&c) { //if that row of the square contains the character
                         found = true;
 
-                        let index = POLYBIUS_SQUARE[j].iter().position(|&x| x == c).unwrap(); //checks for equality to find the index
+                        let index = POLYBIUS_SQUARE[j].iter().position(|&x| x == c).expect("Polybius index match not found."); //checks for equality to find the index
                         if j >= 4 { //we don't want an out-of-bounds j for the index so we wrap the value
                             result += &POLYBIUS_SQUARE[0][index].to_string();
                         } else {
@@ -369,7 +369,7 @@ pub fn polybius_cipher(message: &str, enc_type: &str, settings: &HashMap<String,
                 if POLYBIUS_SQUARE[j].contains(&c) { //if that row of the square contains the character
                     found = true;
 
-                    let index = POLYBIUS_SQUARE[j].iter().position(|&x| x == c).unwrap(); //checks for equality to find the index
+                    let index = POLYBIUS_SQUARE[j].iter().position(|&x| x == c).expect("Polybius index match not found."); //checks for equality to find the index
                     if j == 0 { //we can't get a negative j for the index so we wrap the value
                         result += &POLYBIUS_SQUARE[4][index].to_string();
                     } else {
@@ -405,7 +405,7 @@ pub fn simplesub_cipher(message: &str,seed: &str,enc_type: &str, settings: &Hash
     } else {
         for c in message.to_lowercase().chars() {
             if c.is_lowercase() {                  
-                let index = alphabet.iter().position(|&x| x == c).unwrap(); //get the index for character 'c'
+                let index = alphabet.iter().position(|&x| x == c).expect("Character's index not found."); //get the index for character 'c'
                 result += &((index as i32 + 97) as u8 as char).to_string();
             } else {
                 result += &c.to_string();
@@ -432,7 +432,10 @@ pub fn col_trans_cipher(message: &str,mut key: &str,enc_type: &str, settings: &H
         }
         for ch in message.chars() {
             // For each char in the message:
-            dict.get_mut(&key.chars().nth(cursor).unwrap()).unwrap().push(ch); // Update the message for the key by adding a new vec entry
+            dict.get_mut(&key.chars().nth(cursor)
+            .expect("Character at cursor index not found."))
+            .expect("Character in Vector not found.")
+            .push(ch); // Update the message for the key by adding a new vec entry
             cursor += 1;
             if cursor >= key.len() {
                 cursor = 0;
@@ -467,7 +470,7 @@ pub fn col_trans_cipher(message: &str,mut key: &str,enc_type: &str, settings: &H
         let mut cursor = 0;
         let mut char_cursor = 0;
         for ch in message.chars() {
-                dict.get_mut(&kl_sorted[char_cursor]).unwrap().push(ch);
+                dict.get_mut(&kl_sorted[char_cursor]).expect("Character could not be found in keylist.").push(ch);
                 if cursor < (rows - 1) {cursor+=1;} else {cursor = 0; char_cursor += 1;}
         }
         //Now we must sort in the correct (original key's) order again to recover message 
@@ -513,7 +516,7 @@ pub fn autokey_cipher(message: &str, key: &str, enc_type: &str, settings: &HashM
             Ok(val) => val,
             Err(_e) => {
                 eprintln!("ERROR: Key len of 0, using default key: 'key' instead.");
-                AsciiStr::from_ascii(default).unwrap()
+                AsciiStr::from_ascii(default).expect("Default bytes should convert to ascii key.")
             }
         };
 
@@ -552,7 +555,7 @@ pub fn autokey_cipher(message: &str, key: &str, enc_type: &str, settings: &HashM
             let idx_key = match indexed_key {
                 Ok(val) => val,
                 Err(_e) => {
-                    AsciiStr::from_ascii(default).unwrap()
+                    AsciiStr::from_ascii(default).expect("Default bytes should convert to ascii key.")
                 }
             };
             let key_ascii_arr = idx_key.as_slice();

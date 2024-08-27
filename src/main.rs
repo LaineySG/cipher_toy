@@ -62,18 +62,18 @@ impl MainWindow {
     fn new(_cc: &eframe::CreationContext<'_>) -> Self {
         let results = Self::init_settings();
         let passwordlist; let alpha_lower; let alpha_upper; let alpha_digits; let alpha_specials;
-        if results.as_ref().unwrap().is_empty() {
+        if results.as_ref().expect("Settings are empty and should be initialized as a Result.").is_empty() {
             passwordlist = String::from("src/data/rockyou.txt");
             alpha_lower = true;
             alpha_upper = false;
             alpha_digits = false;
             alpha_specials = false;
         } else {
-            passwordlist = String::from(results.as_ref().unwrap().get("password_list").expect("err"));
-            alpha_lower = results.as_ref().unwrap().get("alphabet_lowercase").expect("err").contains("true");
-            alpha_upper = results.as_ref().unwrap().get("alphabet_uppercase").expect("err").contains("true");
-            alpha_digits = results.as_ref().unwrap().get("alphabet_digits").expect("err").contains("true");
-            alpha_specials = results.as_ref().unwrap().get("alphabet_specials").expect("err").contains("true");
+            passwordlist = String::from(results.as_ref().expect("Settings should be a result.").get("password_list").expect("Key not found in settings."));
+            alpha_lower = results.as_ref().expect("Settings should be a result.").get("alphabet_lowercase").expect("Key not found in settings.").contains("true");
+            alpha_upper = results.as_ref().expect("Settings should be a result.").get("alphabet_uppercase").expect("Key not found in settings.").contains("true");
+            alpha_digits = results.as_ref().expect("Settings should be a result.").get("alphabet_digits").expect("Key not found in settings.").contains("true");
+            alpha_specials = results.as_ref().expect("Settings should be a result.").get("alphabet_specials").expect("Key not found in settings.").contains("true");
         }
         Self {
             message_input: String::new(),
@@ -109,7 +109,7 @@ impl MainWindow {
     }
     fn call_run_operations(result: Arc<Mutex<String>>,message_input: String, selected_action: String, key_input: String, encrypt_or_decrypt: String,completion_percentage_arcmutex:Arc<Mutex<f32>>,bruteforce_options:HashMap<String,bool>,wordlist:bool) {
         let _handle = tokio::spawn(async move {
-            let settings = Self::retrieve_settings().unwrap();
+            let settings = Self::retrieve_settings().expect("User settings retrieval didn't return a hashmap.");
             let _output = run_operations(message_input.to_string(), selected_action.to_string(),key_input.to_string(), encrypt_or_decrypt.to_string(),completion_percentage_arcmutex,result,bruteforce_options,wordlist,settings).await;
 
         });
@@ -121,19 +121,19 @@ impl MainWindow {
         let config_file_map = config.load("src/settings.ini");
         match config_file_map {
             Ok(map) => { //if ok, retrieve settings and return them
-                let file_locs_loaded = map.get("file locations").unwrap();
-                let alpha_settings_loaded = map.get("alphabet options").unwrap();
+                let file_locs_loaded = map.get("file locations").expect("File locations setting not found.");
+                let alpha_settings_loaded = map.get("alphabet options").expect("Alphabet Options setting not found.");
 
-                let password_list = file_locs_loaded.get("password_list").unwrap().clone().expect("err");
+                let password_list = file_locs_loaded.get("password_list").expect("Password list settings not found.").clone().expect("Clone of password list settings didn't return a proper result.");
                 loaded_settings.insert("password_list".to_string(), password_list);
                 
-                let alphabet_lowercase = alpha_settings_loaded.get("alphabet_lowercase").unwrap().clone().expect("err");
+                let alphabet_lowercase = alpha_settings_loaded.get("alphabet_lowercase").expect("Alpha_lowercase settings not found.").clone().expect("Clone of alpha_lowercase settings didn't return a proper result.");
                 loaded_settings.insert("alphabet_lowercase".to_string(), alphabet_lowercase);
-                let alphabet_uppercase = alpha_settings_loaded.get("alphabet_uppercase").unwrap().clone().expect("err");
+                let alphabet_uppercase = alpha_settings_loaded.get("alphabet_uppercase").expect("Alpha_uppercase settings not found.").clone().expect("Clone of alpha_uppercase settings didn't return a proper result.");
                 loaded_settings.insert("alphabet_uppercase".to_string(), alphabet_uppercase);
-                let alphabet_digits = alpha_settings_loaded.get("alphabet_digits").unwrap().clone().expect("err");
+                let alphabet_digits = alpha_settings_loaded.get("alphabet_digits").expect("Alpha_digits settings not found.").clone().expect("Clone of alpha_digits settings didn't return a proper result.");
                 loaded_settings.insert("alphabet_digits".to_string(), alphabet_digits);
-                let alphabet_specials = alpha_settings_loaded.get("alphabet_specials").unwrap().clone().expect("err");
+                let alphabet_specials = alpha_settings_loaded.get("alphabet_specials").expect("Alpha_specials settings not found.").clone().expect("Clone of alpha_specials settings didn't return a proper result.");
                 loaded_settings.insert("alphabet_specials".to_string(), alphabet_specials);
                 
             },
@@ -160,10 +160,10 @@ impl MainWindow {
         let mut config = Ini::new();
         
         let config_file_map = config.load("src/settings.ini");
-        let alpha_lower = settings.get("alphabet_lowercase").expect("err").to_string();
-        let alpha_upper = settings.get("alphabet_uppercase").expect("err").to_string();
-        let alpha_specials = settings.get("alphabet_specials").expect("err").to_string();
-        let alpha_digits = settings.get("alphabet_digits").expect("err").to_string();  
+        let alpha_lower = settings.get("alphabet_lowercase").expect("Error retrieving alphabet_lowercase settings.").to_string();
+        let alpha_upper = settings.get("alphabet_uppercase").expect("Error retrieving alphabet_uppercase settings.").to_string();
+        let alpha_specials = settings.get("alphabet_specials").expect("Error retrieving alphabet_specials settings.").to_string();
+        let alpha_digits = settings.get("alphabet_digits").expect("Error retrieving alphabet_digits settings.").to_string();  
 
         config.set("File Locations", "password_list", Some(password_list));
         
@@ -392,7 +392,7 @@ impl eframe::App for MainWindow {
             }
             ui.vertical_centered(|ui| {
                 if ui.button("Start").clicked() {
-                    *result.clone().lock().unwrap() = "Working...".to_string();
+                    *result.clone().lock().expect("Error thrown while retrieving operation results.") = "Working...".to_string();
                     
                     MainWindow::call_run_operations(result.clone(),message_input.to_string(), selected_action.to_string(),
                     key_input.to_string(), encrypt_or_decrypt.to_string(),
@@ -414,11 +414,11 @@ impl eframe::App for MainWindow {
             .default_height(400.0)
             .show_inside(ui, |ui| { egui::ScrollArea::vertical().show(ui, |ui| {
                 ui.vertical_centered(|ui| {
-                    let res_string = result.lock().unwrap().clone();
+                    let res_string = result.lock().expect("Error retrieving result arcmut as a string.").clone();
                     ui.label(format!("Resulting {} is: \t",result_description));
 
                     ui.label(format!("{res_string}")).highlight();
-                    completion_progress = completion_percentage_arcmutex.lock().unwrap().clone() as f32;
+                    completion_progress = completion_percentage_arcmutex.lock().expect("Error retrieving completion percentage arcmut.").clone() as f32;
 
                     if completion_progress > 0.0 {
                         let progress = completion_progress / 360.0;
@@ -426,7 +426,7 @@ impl eframe::App for MainWindow {
                         ui.add(progress_bar);
                     }
                     if completion_progress >= 360.0 { //reset
-                        *completion_percentage_arcmutex.lock().unwrap() = 0.0;
+                        *completion_percentage_arcmutex.lock().expect("Error retrieving completion percentage arcmut to reset bar.") = 0.0;
                     }
                 });
             });
@@ -446,7 +446,7 @@ async fn run_operations(message_input:String,selected_action:String,secret_key:S
     let x = match selected_action.to_lowercase() {
         opt if opt.contains("caesar") => {
             if secret_key.trim().to_lowercase().parse::<i32>().is_ok() { 
-                let shift_key = secret_key.trim().to_lowercase().parse::<i32>().unwrap(); //Try to get shift key as integer
+                let shift_key = secret_key.trim().to_lowercase().parse::<i32>().expect("Unable to parse Caesar secret key as integer."); //Try to get shift key as integer
                 let result = ciphers::caesar_cipher(&message_input,shift_key,&encrypt_or_decrypt, &settings);
                 result
             } else {
@@ -473,8 +473,8 @@ async fn run_operations(message_input:String,selected_action:String,secret_key:S
             let args: Vec<&str> = secret_key.split(',').collect();
             if let Some(_val) = args.get(1) {
                 if args[0].parse::<i32>().is_ok() && args[1].parse::<i32>().is_ok() {
-                    let a = args[0].trim().to_lowercase().parse::<i32>().unwrap(); 
-                    let b = args[1].trim().to_lowercase().parse::<i32>().unwrap(); 
+                    let a = args[0].trim().to_lowercase().parse::<i32>().expect("Unable to parse affine cipher 'a' as integer."); 
+                    let b = args[1].trim().to_lowercase().parse::<i32>().expect("Unable to parse affine cipher 'b' as integer."); 
                     let result = ciphers::affine_cipher(&message_input,a,b,&encrypt_or_decrypt, &settings);
                     result
                 } else {
@@ -489,7 +489,7 @@ async fn run_operations(message_input:String,selected_action:String,secret_key:S
         },
         opt if opt.contains("railfence") => {
             if secret_key.parse::<i32>().is_ok() {
-                let key_int = secret_key.trim().to_lowercase().parse::<i32>().unwrap(); 
+                let key_int = secret_key.trim().to_lowercase().parse::<i32>().expect("Unable to parse railfence secret key as integer."); 
                 let result = ciphers::railfence_cipher(&message_input, key_int, &encrypt_or_decrypt, &settings);
                 result
             } else {
@@ -517,12 +517,12 @@ async fn run_operations(message_input:String,selected_action:String,secret_key:S
             result
         },
         opt if opt.contains("score") => {
-            let file_loc_settings = settings.get("file locations").unwrap();
+            let file_loc_settings = settings.get("file locations").expect("Unable to retrieve file locations from settings for scoring.");
             let word_list_path;
             if wordlist == true { //10000
-                word_list_path = file_loc_settings.get("10000_word_list").unwrap().clone().expect("err");
+                word_list_path = file_loc_settings.get("10000_word_list").expect("Unable to retrieve file location for '10,000 word list'.").clone().expect("Error cloning file location setting for 10,000 word list.");
             } else {
-                word_list_path = file_loc_settings.get("1000_word_list").unwrap().clone().expect("err");
+                word_list_path = file_loc_settings.get("1000_word_list").expect("Unable to retrieve file location for '1000 word list'.").clone().expect("Error cloning file location setting for 1000 word list.");
             }
             
             let mut word_list: Vec<String> = vec![];
@@ -549,19 +549,19 @@ async fn run_operations(message_input:String,selected_action:String,secret_key:S
             if bruteforce_options_string.contains("vigenere") || bruteforce_options_string.contains("columnar") || bruteforce_options_string.contains("beaufort") ||
             bruteforce_options_string.contains("autokey") || bruteforce_options_string.contains("simplesub") {
                 if secret_key.parse::<f64>().is_ok() {
-                    let file_loc_settings = settings.get("file locations").unwrap();
-                    let password_list_path = file_loc_settings.get("password_list").unwrap().clone().expect("err");
-                    let password_list_handle = File::open(password_list_path).unwrap();
-                    let filesizelinecount = count_lines(password_list_handle).unwrap();
+                    let file_loc_settings = settings.get("file locations").expect("Unable to retrieve file locations from settings.");
+                    let password_list_path = file_loc_settings.get("password_list").expect("Unable to retrieve password_list location from settings.").clone().expect("Error cloning password_list setting.");
+                    let password_list_handle = File::open(password_list_path).expect("Unable to find password_list file in given filepath {password_list_path}");
+                    let filesizelinecount = count_lines(password_list_handle).expect("Unexpected return value of linecount in password_list file.");
                     let linecount = filesizelinecount as f64;
-                    let keyasf64 = secret_key.trim().to_lowercase().parse::<f64>().unwrap();
+                    let keyasf64 = secret_key.trim().to_lowercase().parse::<f64>().expect("Percentage of password list to check cannot be interpreted as f64 for keyed cipher.");
                     bfl = (keyasf64 / 100.0 * linecount).floor() as i32; //linecount is the number of passwords in the bruteforce list
                 }
             }
             
             let result = utils::bruteforce(&message_input, &bruteforce_options_string,completion_percentage_arcmutex,bfl,result.clone(),wordlist, &settings).await;
             if result.is_ok() {
-                result.unwrap()
+                result.expect("Results could not be unwrapped despite not returning an error.")
             } else {
                 String::from("Error: bruteforce could not be completed.")
             }
@@ -572,10 +572,10 @@ async fn run_operations(message_input:String,selected_action:String,secret_key:S
     };
     let result_clone = Arc::clone(&result);
     let handle = thread::spawn(move || {
-        let mut res_mod = result_clone.lock().unwrap();
+        let mut res_mod = result_clone.lock().expect("Results could not be cloned for modification.");
         *res_mod = x;
     });
-    handle.join().unwrap();
+    handle.join().expect("Error joining handles.");
     String::new()
 }
 
